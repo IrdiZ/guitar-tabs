@@ -61,6 +61,13 @@ try:
 except ImportError:
     HAS_PARSELMOUTH = False
 
+# Import our custom YIN implementation
+try:
+    from yin_pitch import detect_yin_for_ensemble, YinConfig
+    HAS_YIN = True
+except ImportError:
+    HAS_YIN = False
+
 # Constants
 GUITAR_MIN_HZ = 75
 GUITAR_MAX_HZ = 1400

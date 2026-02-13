@@ -256,6 +256,20 @@ try:
 except ImportError:
     HAS_SOLO_DETECTION = False
 
+# Fast legato run detection (3-note-per-string, scale runs)
+try:
+    from fast_legato_runs import (
+        FastLegatoDetector,
+        LegatoNote,
+        LegatoRun,
+        detect_fast_legato_runs,
+        SCALE_PATTERNS,
+        THREE_NPS_PATTERNS,
+    )
+    HAS_FAST_LEGATO = True
+except ImportError:
+    HAS_FAST_LEGATO = False
+
 # Basic Pitch support via Docker
 import json
 import shutil
@@ -4666,6 +4680,20 @@ Examples:
         parser.add_argument('--detect-solos', action='store_true',
                             help='Enable automatic solo vs rhythm section detection')
     
+    # Fast legato run detection arguments
+    parser.add_argument('--fast-legato', action='store_true',
+                        help='Enable fast legato run detection (hammer-ons, pull-offs, 3nps runs)')
+    parser.add_argument('--legato-min-duration', type=float, default=30.0,
+                        help='Minimum note duration in fast legato runs (ms, default: 30)')
+    parser.add_argument('--legato-threshold', type=float, default=125.0,
+                        help='IOI threshold for fast passages (ms, default: 125)')
+    parser.add_argument('--legato-min-notes', type=int, default=4,
+                        help='Minimum notes to form a legato run (default: 4)')
+    parser.add_argument('--legato-scale-match', action='store_true', default=True,
+                        help='Use scale pattern matching to fill gaps (default: on)')
+    parser.add_argument('--no-legato-scale-match', action='store_true',
+                        help='Disable scale pattern matching for legato runs')
+    
     args = parser.parse_args()
     
     # Parse tuning
@@ -4934,6 +4962,30 @@ Examples:
         else:
             print("  No chord patterns detected")
     
+    # =========================================================================
+    # SOLO SECTION DETECTION
+    # =========================================================================
+    detected_sections = None
+    if detect_solos and HAS_SOLO_DETECTION:
+        print("\n🎸 Detecting Solo vs Rhythm Sections...")
+        print("-" * 40)
+        
+        # Load audio for solo detection
+        y_solo, sr_solo = librosa.load(audio_path, sr=22050, mono=True)
+        
+        # Detect sections
+        detected_sections = detect_solo_sections(
+            y=y_solo,
+            sr=sr_solo,
+            config=solo_detection_config,
+            verbose=True
+        )
+        
+        # Apply range constraints to notes based on section type
+        if detected_sections:
+            print("\n  Applying section-specific pitch constraints...")
+            notes = apply_solo_range_constraints(notes, detected_sections, tuning, verbose=True)
+    
     # Convert to tabs - use spectral string detection if requested
     use_spectral = args.spectral_strings and HAS_STRING_DETECTION
     
@@ -4988,7 +5040,13 @@ Examples:
             else:
                 tab_notes = notes_to_tabs(notes, tuning)
     else:
-        if use_spectral:
+        # Use solo-aware tab conversion if sections were detected
+        if detected_sections and HAS_SOLO_DETECTION:
+            print("\n🎸 Using solo-aware fret placement...")
+            tab_notes = notes_to_tabs_with_solo_detection(
+                notes, detected_sections, tuning, verbose=args.string_detection_verbose
+            )
+        elif use_spectral:
             tab_notes = notes_to_tabs_spectral(
                 notes, audio_path=audio_path, tuning=tuning,
                 verbose=args.string_detection_verbose

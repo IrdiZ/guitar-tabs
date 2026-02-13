@@ -38,6 +38,7 @@ class Technique(Enum):
     VIBRATO = "~"      # Periodic pitch oscillation
     TRILL = "tr"       # Rapid alternation between two notes
     TREMOLO = "*"      # Rapid repeated notes (tremolo picking)
+    TAP = "t"          # Two-hand tapping (right hand taps fretboard)
 
 
 @dataclass
@@ -89,6 +90,11 @@ class TechniqueAnnotation:
         
         if self.technique == Technique.TREMOLO:
             return f"{source_fret}*"
+        
+        if self.technique == Technique.TAP:
+            if self.target_fret is not None:
+                return f"t{source_fret}-p{self.target_fret}"
+            return f"t{source_fret}"
         
         return str(source_fret)
 
@@ -254,6 +260,9 @@ class TechniqueDetector:
         
         # Pass 6: Detect tremolo picking (rapid repeated notes)
         self._detect_tremolo(annotated)
+        
+        # Pass 7: Detect two-hand tapping (wide interval jumps with legato)
+        self._detect_tapping(annotated, y, onset_details)
         
         if verbose:
             self._print_stats(annotated)
