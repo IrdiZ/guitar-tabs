@@ -46,6 +46,53 @@ NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 GUITAR_MIN_HZ = 75   # Below E2 (82 Hz) to catch drop tunings
 GUITAR_MAX_HZ = 1400  # Above high frets on high E string
 
+# Chord detection threshold (notes within this time window are considered simultaneous)
+CHORD_TIME_THRESHOLD = 0.050  # 50ms
+
+# Common chord definitions: chord_name -> intervals from root (semitones)
+CHORD_INTERVALS = {
+    # Major chords
+    '': [0, 4, 7],  # Major (no suffix)
+    'maj': [0, 4, 7],
+    # Minor chords
+    'm': [0, 3, 7],
+    'min': [0, 3, 7],
+    # 7th chords
+    '7': [0, 4, 7, 10],
+    'maj7': [0, 4, 7, 11],
+    'm7': [0, 3, 7, 10],
+    # Sus chords
+    'sus2': [0, 2, 7],
+    'sus4': [0, 5, 7],
+    # Diminished/Augmented
+    'dim': [0, 3, 6],
+    'aug': [0, 4, 8],
+    # Add chords
+    'add9': [0, 4, 7, 14],
+    # Power chord
+    '5': [0, 7],
+}
+
+# Common open chord shapes: chord_name -> [(string, fret), ...] where -1 = muted
+OPEN_CHORD_SHAPES = {
+    'C': [(0, -1), (1, 3), (2, 2), (3, 0), (4, 1), (5, 0)],
+    'Am': [(0, -1), (1, 0), (2, 2), (3, 2), (4, 1), (5, 0)],
+    'G': [(0, 3), (1, 2), (2, 0), (3, 0), (4, 0), (5, 3)],
+    'D': [(0, -1), (1, -1), (2, 0), (3, 2), (4, 3), (5, 2)],
+    'Dm': [(0, -1), (1, -1), (2, 0), (3, 2), (4, 3), (5, 1)],
+    'E': [(0, 0), (1, 2), (2, 2), (3, 1), (4, 0), (5, 0)],
+    'Em': [(0, 0), (1, 2), (2, 2), (3, 0), (4, 0), (5, 0)],
+    'A': [(0, -1), (1, 0), (2, 2), (3, 2), (4, 2), (5, 0)],
+    'F': [(0, 1), (1, 3), (2, 3), (3, 2), (4, 1), (5, 1)],  # Barre chord
+    'Bm': [(0, -1), (1, 2), (2, 4), (3, 4), (4, 3), (5, 2)],  # Barre chord
+    'B7': [(0, -1), (1, 2), (2, 1), (3, 2), (4, 0), (5, 2)],
+    'G7': [(0, 3), (1, 2), (2, 0), (3, 0), (4, 0), (5, 1)],
+    'C7': [(0, -1), (1, 3), (2, 2), (3, 3), (4, 1), (5, 0)],
+    'D7': [(0, -1), (1, -1), (2, 0), (3, 2), (4, 1), (5, 2)],
+    'A7': [(0, -1), (1, 0), (2, 2), (3, 0), (4, 2), (5, 0)],
+    'E7': [(0, 0), (1, 2), (2, 0), (3, 1), (4, 0), (5, 0)],
+}
+
 
 @dataclass
 class Note:
@@ -58,6 +105,16 @@ class Note:
     @property
     def name(self) -> str:
         return NOTE_NAMES[self.midi % 12] + str(self.midi // 12 - 1)
+    
+    @property
+    def note_class(self) -> int:
+        """Return pitch class (0-11)"""
+        return self.midi % 12
+    
+    @property
+    def note_name(self) -> str:
+        """Return just the note name without octave"""
+        return NOTE_NAMES[self.midi % 12]
     
     @property
     def frequency(self) -> float:
@@ -74,6 +131,26 @@ class TabNote:
     
     def __str__(self):
         return f"String {STRING_NAMES[self.string]}, Fret {self.fret}"
+
+
+@dataclass
+class Chord:
+    """Represents a detected chord"""
+    name: str  # e.g., "Am", "G", "C7"
+    root: int  # MIDI pitch class (0-11)
+    notes: List[Note]  # Notes that make up this chord
+    start_time: float
+    duration: float
+    quality: str = ""  # "maj", "m", "7", etc.
+    is_barre: bool = False
+    confidence: float = 0.0
+    
+    @property
+    def root_name(self) -> str:
+        return NOTE_NAMES[self.root]
+    
+    def __str__(self) -> str:
+        return self.name
 
 
 def get_tuning(tuning_name: str) -> List[int]:
@@ -485,8 +562,266 @@ def notes_to_tabs(notes: List[Note], tuning: List[int] = None) -> List[TabNote]:
     return tab_notes
 
 
-def format_ascii_tab(tab_notes: List[TabNote], beats_per_line: int = 16, tuning: List[int] = None) -> str:
-    """Format tab notes as ASCII guitar tablature."""
+# ============================================================================
+# CHORD DETECTION
+# ============================================================================
+
+def group_simultaneous_notes(
+    notes: List[Note],
+    time_threshold: float = CHORD_TIME_THRESHOLD
+) -> List[List[Note]]:
+    """
+    Group notes that play simultaneously (within time_threshold).
+    Returns list of note groups.
+    """
+    if not notes:
+        return []
+    
+    # Sort notes by start time
+    sorted_notes = sorted(notes, key=lambda n: n.start_time)
+    
+    groups = []
+    current_group = [sorted_notes[0]]
+    
+    for note in sorted_notes[1:]:
+        # Check if note is within threshold of first note in current group
+        if note.start_time - current_group[0].start_time <= time_threshold:
+            current_group.append(note)
+        else:
+            groups.append(current_group)
+            current_group = [note]
+    
+    # Don't forget the last group
+    if current_group:
+        groups.append(current_group)
+    
+    return groups
+
+
+def identify_chord_from_notes(notes: List[Note]) -> Optional[Chord]:
+    """
+    Identify a chord from a group of simultaneous notes.
+    Returns None if no chord pattern matches.
+    """
+    if len(notes) < 2:
+        return None
+    
+    # Get unique pitch classes
+    pitch_classes = sorted(set(n.note_class for n in notes))
+    
+    if len(pitch_classes) < 2:
+        return None
+    
+    # Calculate confidence based on number of notes
+    avg_confidence = sum(n.confidence for n in notes) / len(notes)
+    
+    # Try each pitch class as potential root
+    best_match = None
+    best_score = 0
+    
+    for potential_root in pitch_classes:
+        # Normalize intervals relative to this root
+        intervals = sorted(set((pc - potential_root) % 12 for pc in pitch_classes))
+        
+        # Try to match against known chord types
+        for chord_suffix, chord_intervals in CHORD_INTERVALS.items():
+            # Calculate match score
+            matched = sum(1 for i in intervals if i in chord_intervals)
+            total = len(chord_intervals)
+            
+            # Score considers both coverage and accuracy
+            if matched >= 2:  # Need at least 2 matching intervals
+                score = (matched / total) * (matched / len(intervals))
+                
+                if score > best_score:
+                    best_score = score
+                    root_name = NOTE_NAMES[potential_root]
+                    chord_name = root_name + chord_suffix if chord_suffix else root_name
+                    
+                    best_match = {
+                        'name': chord_name,
+                        'root': potential_root,
+                        'quality': chord_suffix,
+                        'score': score
+                    }
+    
+    if best_match and best_score >= 0.5:  # Minimum match threshold
+        start_time = min(n.start_time for n in notes)
+        max_end = max(n.start_time + n.duration for n in notes)
+        duration = max_end - start_time
+        
+        return Chord(
+            name=best_match['name'],
+            root=best_match['root'],
+            notes=notes,
+            start_time=start_time,
+            duration=duration,
+            quality=best_match['quality'],
+            confidence=avg_confidence * best_score
+        )
+    
+    return None
+
+
+def detect_chord_shape(chord: Chord, tab_notes: List[TabNote]) -> Optional[str]:
+    """
+    Detect if a chord matches a known open or barre chord shape.
+    Returns the shape name if found.
+    """
+    # Find tab notes that correspond to this chord's timing
+    chord_tab_notes = [
+        tn for tn in tab_notes
+        if abs(tn.start_time - chord.start_time) <= CHORD_TIME_THRESHOLD
+    ]
+    
+    if len(chord_tab_notes) < 2:
+        return None
+    
+    # Create a fret pattern from the tab notes
+    fret_pattern = {tn.string: tn.fret for tn in chord_tab_notes}
+    
+    # Check against known shapes
+    for shape_name, shape_frets in OPEN_CHORD_SHAPES.items():
+        # Skip if root doesn't match
+        shape_root = shape_name.replace('m', '').replace('7', '').replace('sus', '').replace('dim', '')
+        if shape_root and shape_root[0] != chord.root_name[0]:
+            continue
+        
+        # Count matching frets
+        matches = 0
+        total_played = 0
+        
+        for string, expected_fret in shape_frets:
+            if expected_fret == -1:  # Muted string
+                continue
+            total_played += 1
+            if string in fret_pattern and fret_pattern[string] == expected_fret:
+                matches += 1
+        
+        if total_played > 0 and matches / total_played >= 0.6:
+            # Check if it's a barre chord
+            is_barre = any(
+                sum(1 for s, f in shape_frets if f == fret and f > 0) >= 2
+                for fret in range(1, 13)
+            )
+            chord.is_barre = is_barre
+            return shape_name
+    
+    return None
+
+
+def detect_chords(
+    notes: List[Note],
+    time_threshold: float = CHORD_TIME_THRESHOLD
+) -> List[Chord]:
+    """
+    Detect chords from a list of notes.
+    Groups simultaneous notes and identifies chord patterns.
+    """
+    groups = group_simultaneous_notes(notes, time_threshold)
+    chords = []
+    
+    for group in groups:
+        if len(group) >= 2:  # Need at least 2 notes for a chord
+            chord = identify_chord_from_notes(group)
+            if chord:
+                chords.append(chord)
+    
+    return chords
+
+
+def generate_chord_diagram(chord_name: str) -> str:
+    """
+    Generate ASCII art chord diagram for a chord.
+    Returns multi-line string with the diagram.
+    """
+    if chord_name not in OPEN_CHORD_SHAPES:
+        # Try to find similar chord
+        base_name = chord_name.replace('m', '').replace('7', '')
+        if base_name + 'm' in OPEN_CHORD_SHAPES and 'm' in chord_name:
+            chord_name = base_name + 'm'
+        elif base_name in OPEN_CHORD_SHAPES:
+            chord_name = base_name
+        else:
+            return f"  {chord_name}\n  (no diagram)"
+    
+    shape = OPEN_CHORD_SHAPES[chord_name]
+    
+    # Find fret range
+    frets_played = [f for s, f in shape if f > 0]
+    if not frets_played:
+        min_fret, max_fret = 0, 3
+    else:
+        min_fret = min(frets_played)
+        max_fret = max(frets_played)
+    
+    # Adjust for barre chords
+    start_fret = 0 if max_fret <= 4 else min_fret - 1
+    
+    lines = [f"  {chord_name}"]
+    
+    # Top indicators (open/muted strings)
+    top_line = "  "
+    for string in range(6):
+        string_fret = shape[string][1]
+        if string_fret == -1:
+            top_line += "x"
+        elif string_fret == 0:
+            top_line += "o"
+        else:
+            top_line += " "
+    lines.append(top_line)
+    
+    # Nut or fret number
+    if start_fret == 0:
+        lines.append("  ╔═════╗")
+    else:
+        lines.append(f" {start_fret}├─────┤")
+    
+    # Draw frets
+    for fret in range(start_fret + 1, start_fret + 5):
+        fret_line = "  │"
+        for string in range(6):
+            string_fret = shape[string][1]
+            if string_fret == fret:
+                fret_line += "●"
+            else:
+                fret_line += "│"
+        fret_line += "│"
+        lines.append(fret_line)
+        if fret < start_fret + 4:
+            lines.append("  ├─────┤")
+        else:
+            lines.append("  └─────┘")
+    
+    # String names
+    lines.append("  E A D G B e")
+    
+    return '\n'.join(lines)
+
+
+def generate_all_chord_diagrams(chords: List[Chord]) -> str:
+    """Generate chord diagrams for all unique chords."""
+    unique_chords = list(set(c.name for c in chords))
+    diagrams = []
+    
+    for chord_name in sorted(unique_chords):
+        diagrams.append(generate_chord_diagram(chord_name))
+    
+    return '\n\n'.join(diagrams)
+
+
+# ============================================================================
+# TAB FORMATTING
+# ============================================================================
+
+def format_ascii_tab(
+    tab_notes: List[TabNote],
+    beats_per_line: int = 16,
+    tuning: List[int] = None,
+    chords: Optional[List[Chord]] = None
+) -> str:
+    """Format tab notes as ASCII guitar tablature with optional chord names above."""
     if not tab_notes:
         return "No notes detected!"
     
@@ -509,6 +844,18 @@ def format_ascii_tab(tab_notes: List[TabNote], beats_per_line: int = 16, tuning:
     # Create grid for each string
     grid = {i: ['-'] * num_positions for i in range(6)}
     
+    # Create chord label grid
+    chord_grid = [' '] * num_positions
+    if chords:
+        for chord in chords:
+            pos = int(chord.start_time / time_resolution)
+            if pos < num_positions:
+                # Place chord name, handling overlaps
+                chord_name = chord.name
+                for i, char in enumerate(chord_name):
+                    if pos + i < num_positions and chord_grid[pos + i] == ' ':
+                        chord_grid[pos + i] = char
+    
     for note in tab_notes:
         pos = int(note.start_time / time_resolution)
         if pos < num_positions:
@@ -519,6 +866,13 @@ def format_ascii_tab(tab_notes: List[TabNote], beats_per_line: int = 16, tuning:
     lines = []
     for start in range(0, num_positions, beats_per_line):
         end = min(start + beats_per_line, num_positions)
+        
+        # Add chord labels line if we have chords
+        if chords:
+            chord_line = ''.join(chord_grid[start:end])
+            if chord_line.strip():  # Only add if there are chords
+                lines.append(f"  {chord_line}")
+        
         for string in range(5, -1, -1):  # High e to low E
             name = string_names[string] if string < len(string_names) else STRING_NAMES[string]
             notes_str = ''.join(grid[string][start:end])
@@ -563,6 +917,423 @@ def is_youtube_url(s: str) -> bool:
     return any(domain in s for domain in ['youtube.com', 'youtu.be', 'youtube-nocookie.com'])
 
 
+def export_guitar_pro(
+    tab_notes: List[TabNote],
+    output_path: str,
+    title: str = "Generated Tab",
+    artist: str = "Guitar Tab Generator",
+    tempo: int = 120,
+    tuning: List[int] = None
+) -> bool:
+    """
+    Export tab notes to Guitar Pro format (GP5).
+    
+    Args:
+        tab_notes: List of TabNote objects
+        output_path: Path to save the GP5 file
+        title: Song title
+        artist: Artist name
+        tempo: Tempo in BPM
+        tuning: Guitar tuning as MIDI note numbers
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if tuning is None:
+        tuning = STANDARD_TUNING
+    
+    if not HAS_GUITARPRO:
+        print("❌ pyguitarpro not installed. Install with: pip install pyguitarpro")
+        return False
+    
+    if not tab_notes:
+        print("❌ No notes to export")
+        return False
+    
+    # Create song
+    song = guitarpro.Song()
+    song.title = title
+    song.artist = artist
+    song.tempo = guitarpro.models.MixTableItem(value=tempo)
+    
+    # Create track
+    track = guitarpro.Track(song=song)
+    track.name = "Guitar"
+    track.fretCount = NUM_FRETS
+    
+    # Set up guitar strings (standard tuning)
+    track.strings = []
+    for i, midi_note in enumerate(reversed(tuning)):  # GP uses high to low
+        string = guitarpro.GuitarString(number=i + 1, value=midi_note)
+        track.strings.append(string)
+    
+    # Time resolution - convert time to beats
+    time_per_beat = 60.0 / tempo  # seconds per beat
+    time_per_measure = time_per_beat * 4  # 4/4 time
+    
+    # Group notes into measures
+    max_time = max(n.start_time + n.duration for n in tab_notes)
+    num_measures = int(max_time / time_per_measure) + 1
+    
+    # Create measure headers
+    for i in range(num_measures):
+        header = guitarpro.MeasureHeader()
+        header.number = i + 1
+        header.start = int(i * 960 * 4)  # 960 ticks per quarter note
+        header.tempo = guitarpro.models.MixTableItem(value=tempo) if i == 0 else None
+        header.timeSignature = guitarpro.TimeSignature()
+        header.timeSignature.numerator = 4
+        header.timeSignature.denominator = guitarpro.Duration()
+        header.timeSignature.denominator.value = 4
+        song.measureHeaders.append(header)
+    
+    # Create measures for the track
+    for header in song.measureHeaders:
+        measure = guitarpro.Measure(track=track, header=header)
+        
+        # Each measure has voices (we use voice 0)
+        voice = measure.voices[0]
+        
+        # Find notes in this measure
+        measure_start = (header.number - 1) * time_per_measure
+        measure_end = measure_start + time_per_measure
+        
+        measure_notes = [n for n in tab_notes 
+                        if measure_start <= n.start_time < measure_end]
+        
+        if not measure_notes:
+            # Add a rest beat if no notes
+            beat = guitarpro.Beat(voice)
+            beat.status = guitarpro.BeatStatus.rest
+            beat.duration = guitarpro.Duration()
+            beat.duration.value = 1  # Whole note rest
+            voice.beats.append(beat)
+        else:
+            # Group notes by time (for chords)
+            note_groups = {}
+            for tab_note in measure_notes:
+                # Quantize to 16th notes
+                beat_time = round((tab_note.start_time - measure_start) / (time_per_beat / 4)) * (time_per_beat / 4)
+                if beat_time not in note_groups:
+                    note_groups[beat_time] = []
+                note_groups[beat_time].append(tab_note)
+            
+            # Create beats for each time position
+            for beat_time in sorted(note_groups.keys()):
+                beat = guitarpro.Beat(voice)
+                
+                # Determine duration based on note duration
+                avg_duration = sum(n.duration for n in note_groups[beat_time]) / len(note_groups[beat_time])
+                beat.duration = guitarpro.Duration()
+                
+                # Map duration to note value
+                if avg_duration >= time_per_beat * 2:
+                    beat.duration.value = 2  # Half note
+                elif avg_duration >= time_per_beat:
+                    beat.duration.value = 4  # Quarter note
+                elif avg_duration >= time_per_beat / 2:
+                    beat.duration.value = 8  # Eighth note
+                else:
+                    beat.duration.value = 16  # Sixteenth note
+                
+                # Add notes
+                for tab_note in note_groups[beat_time]:
+                    note = guitarpro.Note(beat)
+                    # Guitar Pro uses 1-indexed strings, high to low
+                    note.string = 6 - tab_note.string  # Convert from our 0-indexed low-to-high
+                    note.value = tab_note.fret
+                    note.velocity = 95  # Default velocity
+                    beat.notes.append(note)
+                
+                voice.beats.append(beat)
+        
+        track.measures.append(measure)
+    
+    song.tracks.append(track)
+    
+    # Write file
+    try:
+        guitarpro.write(song, output_path, version=(5, 1, 0))
+        print(f"✅ Exported Guitar Pro file: {output_path}")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to write GP5 file: {e}")
+        return False
+
+
+def export_musicxml(
+    tab_notes: List[TabNote],
+    output_path: str,
+    title: str = "Generated Tab",
+    composer: str = "Guitar Tab Generator",
+    tempo: int = 120,
+    tuning: List[int] = None
+) -> bool:
+    """
+    Export tab notes to MusicXML format.
+    
+    MusicXML is a universal format supported by:
+    - Guitar Pro
+    - MuseScore
+    - Finale
+    - Sibelius
+    - Many other music notation apps
+    
+    Args:
+        tab_notes: List of TabNote objects
+        output_path: Path to save the MusicXML file
+        title: Song title
+        composer: Composer/artist name
+        tempo: Tempo in BPM
+        tuning: Guitar tuning as MIDI note numbers
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if tuning is None:
+        tuning = STANDARD_TUNING
+    
+    if not tab_notes:
+        print("❌ No notes to export")
+        return False
+    
+    # MIDI note to pitch mapping
+    def midi_to_pitch(midi: int) -> Tuple[str, int, int]:
+        """Convert MIDI note to (step, alter, octave)"""
+        note_steps = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B']
+        note_alters = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0]
+        
+        pitch_class = midi % 12
+        octave = (midi // 12) - 1
+        
+        return note_steps[pitch_class], note_alters[pitch_class], octave
+    
+    # Create root element
+    root = ET.Element('score-partwise', version='4.0')
+    
+    # Work info
+    work = ET.SubElement(root, 'work')
+    work_title = ET.SubElement(work, 'work-title')
+    work_title.text = title
+    
+    # Identification
+    identification = ET.SubElement(root, 'identification')
+    creator = ET.SubElement(identification, 'creator', type='composer')
+    creator.text = composer
+    encoding = ET.SubElement(identification, 'encoding')
+    software = ET.SubElement(encoding, 'software')
+    software.text = 'Guitar Tab Generator'
+    
+    # Part list
+    part_list = ET.SubElement(root, 'part-list')
+    score_part = ET.SubElement(part_list, 'score-part', id='P1')
+    part_name = ET.SubElement(score_part, 'part-name')
+    part_name.text = 'Guitar'
+    
+    # Score instrument for tablature
+    score_inst = ET.SubElement(score_part, 'score-instrument', id='P1-I1')
+    inst_name = ET.SubElement(score_inst, 'instrument-name')
+    inst_name.text = 'Acoustic Guitar'
+    
+    # Part content
+    part = ET.SubElement(root, 'part', id='P1')
+    
+    # Time and beat calculations
+    time_per_beat = 60.0 / tempo
+    time_per_measure = time_per_beat * 4  # 4/4 time
+    divisions = 4  # Divisions per quarter note (allows 16th notes)
+    
+    # Group notes by measure
+    max_time = max(n.start_time + n.duration for n in tab_notes)
+    num_measures = int(max_time / time_per_measure) + 1
+    
+    for measure_num in range(1, num_measures + 1):
+        measure = ET.SubElement(part, 'measure', number=str(measure_num))
+        
+        # Attributes for first measure
+        if measure_num == 1:
+            attributes = ET.SubElement(measure, 'attributes')
+            
+            div_elem = ET.SubElement(attributes, 'divisions')
+            div_elem.text = str(divisions)
+            
+            # Key signature (C major)
+            key = ET.SubElement(attributes, 'key')
+            fifths = ET.SubElement(key, 'fifths')
+            fifths.text = '0'
+            
+            # Time signature (4/4)
+            time = ET.SubElement(attributes, 'time')
+            beats = ET.SubElement(time, 'beats')
+            beats.text = '4'
+            beat_type = ET.SubElement(time, 'beat-type')
+            beat_type.text = '4'
+            
+            # Clef (TAB)
+            clef = ET.SubElement(attributes, 'clef')
+            sign = ET.SubElement(clef, 'sign')
+            sign.text = 'TAB'
+            line = ET.SubElement(clef, 'line')
+            line.text = '5'
+            
+            # Staff details (6 string guitar)
+            staff_details = ET.SubElement(attributes, 'staff-details')
+            staff_lines = ET.SubElement(staff_details, 'staff-lines')
+            staff_lines.text = '6'
+            
+            # Tuning
+            for string_num, midi_note in enumerate(reversed(tuning), 1):
+                staff_tuning = ET.SubElement(staff_details, 'staff-tuning', line=str(string_num))
+                step, alter, octave = midi_to_pitch(midi_note)
+                tuning_step = ET.SubElement(staff_tuning, 'tuning-step')
+                tuning_step.text = step
+                if alter:
+                    tuning_alter = ET.SubElement(staff_tuning, 'tuning-alter')
+                    tuning_alter.text = str(alter)
+                tuning_octave = ET.SubElement(staff_tuning, 'tuning-octave')
+                tuning_octave.text = str(octave)
+            
+            # Tempo direction
+            direction = ET.SubElement(measure, 'direction', placement='above')
+            direction_type = ET.SubElement(direction, 'direction-type')
+            metronome = ET.SubElement(direction_type, 'metronome')
+            beat_unit = ET.SubElement(metronome, 'beat-unit')
+            beat_unit.text = 'quarter'
+            per_minute = ET.SubElement(metronome, 'per-minute')
+            per_minute.text = str(tempo)
+            sound = ET.SubElement(direction, 'sound', tempo=str(tempo))
+        
+        # Find notes in this measure
+        measure_start = (measure_num - 1) * time_per_measure
+        measure_end = measure_start + time_per_measure
+        
+        measure_notes = [n for n in tab_notes 
+                        if measure_start <= n.start_time < measure_end]
+        
+        if not measure_notes:
+            # Add whole rest
+            note_elem = ET.SubElement(measure, 'note')
+            rest = ET.SubElement(note_elem, 'rest')
+            duration = ET.SubElement(note_elem, 'duration')
+            duration.text = str(divisions * 4)  # Whole note
+            ntype = ET.SubElement(note_elem, 'type')
+            ntype.text = 'whole'
+        else:
+            # Group notes by time (for chords)
+            note_groups = {}
+            for tab_note in measure_notes:
+                # Quantize to 16th notes
+                quantized = round((tab_note.start_time - measure_start) / (time_per_beat / 4))
+                if quantized not in note_groups:
+                    note_groups[quantized] = []
+                note_groups[quantized].append(tab_note)
+            
+            # Track position for rests
+            current_position = 0
+            
+            for quantized_pos in sorted(note_groups.keys()):
+                # Add rest if there's a gap
+                if quantized_pos > current_position:
+                    gap_duration = quantized_pos - current_position
+                    note_elem = ET.SubElement(measure, 'note')
+                    rest = ET.SubElement(note_elem, 'rest')
+                    dur = ET.SubElement(note_elem, 'duration')
+                    dur.text = str(gap_duration)
+                
+                # Add notes at this position
+                notes_at_pos = note_groups[quantized_pos]
+                is_chord = len(notes_at_pos) > 1
+                
+                for i, tab_note in enumerate(notes_at_pos):
+                    note_elem = ET.SubElement(measure, 'note')
+                    
+                    # Chord indication for simultaneous notes
+                    if is_chord and i > 0:
+                        ET.SubElement(note_elem, 'chord')
+                    
+                    # Calculate MIDI pitch from string and fret
+                    midi_pitch = tuning[tab_note.string] + tab_note.fret
+                    step, alter, octave = midi_to_pitch(midi_pitch)
+                    
+                    pitch = ET.SubElement(note_elem, 'pitch')
+                    step_elem = ET.SubElement(pitch, 'step')
+                    step_elem.text = step
+                    if alter:
+                        alter_elem = ET.SubElement(pitch, 'alter')
+                        alter_elem.text = str(alter)
+                    octave_elem = ET.SubElement(pitch, 'octave')
+                    octave_elem.text = str(octave)
+                    
+                    # Duration
+                    dur_beats = max(1, round(tab_note.duration / time_per_beat * divisions))
+                    duration_elem = ET.SubElement(note_elem, 'duration')
+                    duration_elem.text = str(min(dur_beats, divisions * 4))  # Cap at whole note
+                    
+                    # Note type
+                    ntype = ET.SubElement(note_elem, 'type')
+                    if dur_beats >= divisions * 4:
+                        ntype.text = 'whole'
+                    elif dur_beats >= divisions * 2:
+                        ntype.text = 'half'
+                    elif dur_beats >= divisions:
+                        ntype.text = 'quarter'
+                    elif dur_beats >= divisions // 2:
+                        ntype.text = 'eighth'
+                    else:
+                        ntype.text = '16th'
+                    
+                    # Notations with technical (fret/string)
+                    notations = ET.SubElement(note_elem, 'notations')
+                    technical = ET.SubElement(notations, 'technical')
+                    
+                    string_elem = ET.SubElement(technical, 'string')
+                    string_elem.text = str(6 - tab_note.string)  # MusicXML: 1 = high e
+                    
+                    fret_elem = ET.SubElement(technical, 'fret')
+                    fret_elem.text = str(tab_note.fret)
+                
+                # Update position
+                current_position = quantized_pos + dur_beats
+    
+    # Format XML nicely
+    xml_str = ET.tostring(root, encoding='unicode')
+    
+    # Add XML declaration and DOCTYPE
+    doctype = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    doctype += '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">\n'
+    
+    try:
+        # Pretty print
+        dom = minidom.parseString(xml_str)
+        pretty_xml = dom.toprettyxml(indent='  ')
+        # Remove extra declaration added by minidom
+        pretty_xml = '\n'.join(pretty_xml.split('\n')[1:])
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(doctype)
+            f.write(pretty_xml)
+        
+        print(f"✅ Exported MusicXML file: {output_path}")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to write MusicXML file: {e}")
+        return False
+
+
+def get_export_extension(format_name: str) -> str:
+    """Get the appropriate file extension for an export format."""
+    extensions = {
+        'gp5': '.gp5',
+        'gp': '.gp5',
+        'guitarpro': '.gp5',
+        'musicxml': '.musicxml',
+        'xml': '.musicxml',
+        'ascii': '.txt',
+        'txt': '.txt',
+    }
+    return extensions.get(format_name.lower(), '.txt')
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Generate guitar tabs from audio',
@@ -580,6 +1351,17 @@ Available tunings:
 
 Or specify custom tuning as comma-separated MIDI notes:
   --tuning "38,45,50,55,59,64"
+
+Export formats:
+  ascii     - Plain text tablature (default)
+  gp5       - Guitar Pro 5 format (.gp5)
+  musicxml  - MusicXML format (.musicxml) - universal format
+
+Examples:
+  %(prog)s song.mp3
+  %(prog)s song.mp3 -o tabs.txt
+  %(prog)s song.mp3 -o tabs.gp5 --format gp5
+  %(prog)s "https://youtube.com/watch?v=..." --format musicxml -o song.musicxml
         """
     )
     parser.add_argument('audio_file', help='Path to audio file OR YouTube URL')
@@ -588,6 +1370,16 @@ Or specify custom tuning as comma-separated MIDI notes:
                         help='Minimum confidence threshold (0-1, default: 0.3)')
     parser.add_argument('--tuning', '-t', default='standard',
                         help='Guitar tuning (see list below, default: standard)')
+    parser.add_argument('--format', '-f', 
+                        choices=['ascii', 'gp5', 'gp', 'guitarpro', 'musicxml', 'xml'],
+                        default='ascii',
+                        help='Output format: ascii (default), gp5/guitarpro, musicxml/xml')
+    parser.add_argument('--title', default=None,
+                        help='Song title (for GP5/MusicXML export)')
+    parser.add_argument('--artist', '-a', default='Guitar Tab Generator',
+                        help='Artist name (for GP5/MusicXML export)')
+    parser.add_argument('--tempo', type=int, default=120,
+                        help='Tempo in BPM (default: 120)')
     parser.add_argument('--pitch-method', '-p', choices=['pyin', 'piptrack'], default='pyin',
                         help='Pitch detection method (pyin=better for monophonic, default: pyin)')
     parser.add_argument('--no-harmonic-separation', action='store_true',
@@ -596,6 +1388,12 @@ Or specify custom tuning as comma-separated MIDI notes:
                         help='Median filter size for pitch smoothing (0=disabled, default: 5)')
     parser.add_argument('--min-duration', type=float, default=0.05,
                         help='Minimum note duration in seconds (default: 0.05)')
+    parser.add_argument('--chords', action='store_true',
+                        help='Enable chord detection')
+    parser.add_argument('--chord-diagrams', action='store_true',
+                        help='Show ASCII chord diagrams')
+    parser.add_argument('--chord-threshold', type=float, default=CHORD_TIME_THRESHOLD,
+                        help=f'Time window for simultaneous notes in seconds (default: {CHORD_TIME_THRESHOLD})')
     
     args = parser.parse_args()
     
@@ -613,6 +1411,9 @@ Or specify custom tuning as comma-separated MIDI notes:
     if is_youtube_url(audio_path):
         audio_path = download_youtube_audio(audio_path)
         cleanup_file = True
+    
+    # Determine title from filename if not specified
+    title = args.title or os.path.splitext(os.path.basename(audio_path))[0]
     
     print("🎸 Guitar Tab Generator (Enhanced)")
     print("=" * 40)
@@ -644,11 +1445,45 @@ Or specify custom tuning as comma-separated MIDI notes:
     if len(notes) > 20:
         print(f"  ... and {len(notes) - 20} more")
     
+    # Detect chords if enabled
+    chords = None
+    if args.chords:
+        print("\n🎵 Detecting chords...")
+        chords = detect_chords(notes, time_threshold=args.chord_threshold)
+        
+        if chords:
+            print(f"\n🎶 Detected {len(chords)} chords:")
+            unique_chords = {}
+            for chord in chords:
+                if chord.name not in unique_chords:
+                    unique_chords[chord.name] = 0
+                unique_chords[chord.name] += 1
+            
+            for chord_name, count in sorted(unique_chords.items()):
+                print(f"  {chord_name}: {count}x")
+            
+            # Show chord progression
+            print("\n📋 Chord Progression:")
+            progression = [c.name for c in chords[:16]]  # First 16 chords
+            print(f"  {' → '.join(progression)}")
+            if len(chords) > 16:
+                print(f"  ... and {len(chords) - 16} more")
+        else:
+            print("  No chord patterns detected")
+    
     # Convert to tabs
     tab_notes = notes_to_tabs(notes, tuning)
     
-    # Format as ASCII tab
-    tab_output = format_ascii_tab(tab_notes, tuning=tuning)
+    # Format as ASCII tab (always show preview, with chords if detected)
+    tab_output = format_ascii_tab(tab_notes, tuning=tuning, chords=chords)
+    
+    # Show chord diagrams if requested
+    chord_diagrams = ""
+    if args.chord_diagrams and chords:
+        chord_diagrams = generate_all_chord_diagrams(chords)
+        print("\n📊 Chord Diagrams:")
+        print("-" * 40)
+        print(chord_diagrams)
     
     print("\n🎼 Guitar Tablature:")
     print("-" * 40)
@@ -656,11 +1491,64 @@ Or specify custom tuning as comma-separated MIDI notes:
     
     # Save to file if requested
     if args.output:
-        with open(args.output, 'w') as f:
-            f.write(f"# Guitar Tab - Generated from {os.path.basename(audio_path)}\n")
-            f.write(f"# Tuning: {args.tuning}\n\n")
-            f.write(tab_output)
-        print(f"\n✅ Saved to {args.output}")
+        format_name = args.format.lower()
+        output_path = args.output
+        
+        # Add extension if needed
+        if not os.path.splitext(output_path)[1]:
+            output_path += get_export_extension(format_name)
+        
+        if format_name in ('gp5', 'gp', 'guitarpro'):
+            if not HAS_GUITARPRO:
+                print("\n⚠️  pyguitarpro not installed. Falling back to MusicXML...")
+                format_name = 'musicxml'
+                output_path = os.path.splitext(output_path)[0] + '.musicxml'
+            else:
+                success = export_guitar_pro(
+                    tab_notes,
+                    output_path,
+                    title=title,
+                    artist=args.artist,
+                    tempo=args.tempo,
+                    tuning=tuning
+                )
+                if not success:
+                    sys.exit(1)
+        
+        if format_name in ('musicxml', 'xml'):
+            success = export_musicxml(
+                tab_notes,
+                output_path,
+                title=title,
+                composer=args.artist,
+                tempo=args.tempo,
+                tuning=tuning
+            )
+            if not success:
+                sys.exit(1)
+        
+        elif format_name in ('ascii', 'txt'):
+            with open(output_path, 'w') as f:
+                f.write(f"# Guitar Tab - {title}\n")
+                f.write(f"# Generated from: {os.path.basename(audio_path)}\n")
+                f.write(f"# Tuning: {args.tuning}\n")
+                f.write(f"# Tempo: {args.tempo} BPM\n\n")
+                
+                if chords:
+                    unique_chords = list(set(c.name for c in chords))
+                    f.write(f"## Chords Used: {', '.join(sorted(unique_chords))}\n\n")
+                
+                if chord_diagrams:
+                    f.write("## Chord Diagrams\n\n")
+                    f.write("```\n")
+                    f.write(chord_diagrams)
+                    f.write("\n```\n\n")
+                
+                f.write("## Tablature\n\n")
+                f.write("```\n")
+                f.write(tab_output)
+                f.write("\n```\n")
+            print(f"\n✅ Saved to {output_path}")
     
     # Cleanup temp file if downloaded from YouTube
     if cleanup_file and os.path.exists(audio_path):
