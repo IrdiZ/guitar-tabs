@@ -13,3 +13,5 @@ __pycache__/
 test_*.pdf
 transcribed_*.json
 transcribed_*.pdf
+debug*.png
+debug*_sections/
