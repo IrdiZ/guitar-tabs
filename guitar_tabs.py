@@ -3711,6 +3711,10 @@ Examples:
   %(prog)s song.mp3 --scale pentatonic_minor          # Auto-detect key, use pentatonic
   %(prog)s song.mp3 --quantize 8 --tempo 140          # Quantize to 8ths at 140 BPM
   %(prog)s song.mp3 --detect-patterns --chords        # Find riffs and chords
+  
+  # Web player sync export (follow-along playback)
+  %(prog)s song.mp3 --export-sync song.sync.json      # Generate timeline for web player
+  %(prog)s song.mp3 --export-sync sync.json --chords  # Include chord events in sync data
         """
     )
     parser.add_argument('audio_file', help='Path to audio file OR YouTube URL')
@@ -4177,6 +4181,38 @@ Examples:
                 f.write(tab_output)
                 f.write("\n```\n")
             print(f"\n✅ Saved to {output_path}")
+    
+    # Export sync data for web player if requested
+    if args.export_sync:
+        if not HAS_SYNC_EXPORT:
+            print("\n⚠️  Sync export module not available.")
+            print("   Make sure sync_export.py is in the same directory.")
+        else:
+            # Determine key name for sync data
+            key_name = None
+            if detected_key:
+                key_name = detected_key.name
+            elif args.key:
+                key_name = args.key
+            
+            # Export sync JSON
+            success = export_sync_json(
+                tab_notes=tab_notes,
+                notes=notes,
+                output_path=args.export_sync,
+                audio_path=audio_path,
+                tempo=args.tempo,
+                title=title,
+                artist=args.artist,
+                tuning=tuning,
+                tuning_name=args.tuning,
+                chords=chords,
+                key=key_name,
+                time_signature=(4, 4),
+                verbose=True
+            )
+            if not success:
+                print("❌ Failed to export sync data")
     
     # Cleanup temp file if downloaded from YouTube
     if cleanup_file and os.path.exists(audio_path):

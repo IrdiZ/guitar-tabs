@@ -10,6 +10,7 @@ Uses pYIN pitch tracking to analyze within-note pitch modulation and detect:
 Author: Guitar Tab Generator
 """
 
+import os
 import numpy as np
 import librosa
 from scipy.signal import find_peaks, butter, filtfilt
@@ -667,20 +668,39 @@ def analyze_audio_for_techniques(
 def main():
     """Test the vibrato/trill detection on a sample file."""
     import sys
+    import argparse
     
-    if len(sys.argv) < 2:
-        print("Usage: python vibrato_trill_detection.py <audio_file>")
-        print("\nThis module detects:")
-        print("  - Vibrato (~): Periodic pitch oscillation within a note")
-        print("  - Trills (tr): Rapid alternation between two notes")
-        print("  - Tremolo picking (*): Rapid repeated notes")
+    parser = argparse.ArgumentParser(
+        description='Detect vibrato, trills, and tremolo picking in guitar audio',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Technique notation:
+  ~    - Vibrato (periodic pitch oscillation)
+  tr   - Trill (rapid alternation between two notes)
+  *    - Tremolo picking (rapid repeated notes)
+
+This module analyzes within-note pitch modulation using pYIN tracking.
+It integrates with the main guitar_tabs.py and technique_detector.py systems.
+
+Examples:
+  python vibrato_trill_detection.py song.mp3
+  python vibrato_trill_detection.py song.mp3 --verbose
+        """
+    )
+    
+    parser.add_argument('audio_file', help='Path to audio file')
+    parser.add_argument('--verbose', '-v', action='store_true',
+                        help='Verbose output')
+    
+    args = parser.parse_args()
+    
+    if not os.path.exists(args.audio_file):
+        print(f"Error: File not found: {args.audio_file}", file=sys.stderr)
         return 1
-    
-    audio_path = sys.argv[1]
     
     # Run analysis
     annotated_notes, tab_output = analyze_audio_for_techniques(
-        audio_path, verbose=True
+        args.audio_file, verbose=args.verbose or True
     )
     
     print("\n🎼 Tablature with Technique Annotations:")
@@ -694,13 +714,31 @@ def main():
     
     print("\n📊 Summary:")
     print(f"   Total notes: {len(annotated_notes)}")
-    print(f"   Vibratos: {vibratos}")
-    print(f"   Trills: {trills}")
-    print(f"   Tremolo picks: {tremolos}")
+    print(f"   Vibratos (~): {vibratos}")
+    print(f"   Trills (tr): {trills}")
+    print(f"   Tremolo (*): {tremolos}")
+    
+    # Show technique details
+    if args.verbose:
+        print("\n📋 Detected Techniques:")
+        for n in annotated_notes:
+            if n.technique != TechniqueType.NONE:
+                params = n.technique_params
+                if n.technique == TechniqueType.VIBRATO:
+                    rate = params.get('vibrato_rate', 0)
+                    depth = params.get('vibrato_depth', 0)
+                    print(f"   {n.start_time:.2f}s: Vibrato ~ (rate={rate:.1f}Hz, depth={depth:.1f}cents)")
+                elif n.technique == TechniqueType.TRILL:
+                    interval = params.get('trill_interval', 0)
+                    print(f"   {n.start_time:.2f}s: Trill tr (interval={interval} semitones)")
+                elif n.technique == TechniqueType.TREMOLO:
+                    rate = params.get('tremolo_rate', 0)
+                    print(f"   {n.start_time:.2f}s: Tremolo * (rate={rate:.1f} notes/sec)")
     
     return 0
 
 
 if __name__ == '__main__':
     import sys
+    import os
     sys.exit(main())
