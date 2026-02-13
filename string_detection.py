@@ -664,6 +664,94 @@ def choose_string_position_spectral(
     return pred.string, pred.fret, pred.confidence
 
 
+def compare_string_detection(
+    y: np.ndarray,
+    notes: List,
+    tuning: List[int] = None,
+    sr: int = 22050
+) -> Dict:
+    """
+    Compare spectral string detection with heuristic method.
+    
+    Returns dict with:
+    - agreements: Number of notes where both methods agree
+    - disagreements: List of (note, spectral_pos, heuristic_pos)
+    - spectral_confidences: Average confidence of spectral method
+    """
+    if tuning is None:
+        tuning = STANDARD_TUNING
+    
+    detector = StringDetector(sr=sr, tuning=tuning)
+    
+    agreements = 0
+    disagreements = []
+    confidences = []
+    
+    prev_spectral = None
+    prev_heuristic = None
+    
+    for note in notes:
+        # Spectral prediction
+        pred = detector.predict_string(
+            y, note.midi, note.start_time, note.duration,
+            prev_position=prev_spectral
+        )
+        
+        if pred.string >= 0:
+            spectral_pos = (pred.string, pred.fret)
+            confidences.append(pred.confidence)
+            prev_spectral = spectral_pos
+        else:
+            spectral_pos = None
+        
+        # Heuristic method (simple)
+        from guitar_tabs import midi_to_fret_options
+        options = midi_to_fret_options(note.midi, tuning)
+        
+        if options:
+            # Simple heuristic: prefer lower frets, middle strings
+            scored = []
+            for string, fret in options:
+                score = 0
+                if fret <= 5:
+                    score += 3
+                elif fret <= 12:
+                    score += 1
+                score -= fret * 0.2
+                string_pref = [0.5, 0.8, 1.0, 1.0, 0.8, 0.5]
+                score += string_pref[string] * 3
+                if prev_heuristic:
+                    ps, pf = prev_heuristic
+                    score -= abs(fret - pf) * 0.3
+                    score -= abs(string - ps) * 0.5
+                scored.append((score, string, fret))
+            scored.sort(reverse=True)
+            heuristic_pos = (scored[0][1], scored[0][2])
+            prev_heuristic = heuristic_pos
+        else:
+            heuristic_pos = None
+        
+        # Compare
+        if spectral_pos and heuristic_pos:
+            if spectral_pos == heuristic_pos:
+                agreements += 1
+            else:
+                disagreements.append({
+                    'note': note.name if hasattr(note, 'name') else f"MIDI {note.midi}",
+                    'midi': note.midi,
+                    'spectral': spectral_pos,
+                    'heuristic': heuristic_pos,
+                    'confidence': pred.confidence
+                })
+    
+    return {
+        'total': len(notes),
+        'agreements': agreements,
+        'disagreements': disagreements,
+        'avg_confidence': np.mean(confidences) if confidences else 0
+    }
+
+
 if __name__ == "__main__":
     # Test the string detector
     import sys

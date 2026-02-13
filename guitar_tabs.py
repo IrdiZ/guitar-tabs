@@ -48,6 +48,13 @@ from preprocessing import (
     add_preprocessing_args
 )
 
+# Sync export module for web player integration
+try:
+    from sync_export import export_sync_json, generate_sync_data
+    HAS_SYNC_EXPORT = True
+except ImportError:
+    HAS_SYNC_EXPORT = False
+
 # String detection module for spectral-based string identification
 try:
     from string_detection import (
@@ -3788,6 +3795,10 @@ Examples:
                         help='Show rest symbols in rhythm notation')
     parser.add_argument('--unicode-rhythm', action='store_true',
                         help='Use Unicode music symbols for rhythm (♩♪♬ instead of q e s)')
+    
+    # Sync export for web player integration
+    parser.add_argument('--export-sync', type=str, default=None, metavar='PATH',
+                        help='Export JSON sync data for web player "follow along" playback (e.g., output.sync.json)')
     
     # Add audio preprocessing arguments
     add_preprocessing_args(parser)

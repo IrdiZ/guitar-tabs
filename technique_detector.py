@@ -324,6 +324,10 @@ class TechniqueDetector:
         
         Hammer-on: legato onset with ascending pitch from previous note
         Pull-off: legato onset with descending pitch from previous note
+        
+        For ASCII notation:
+        - The SOURCE note gets the technique annotation (e.g., "5h7")
+        - The TARGET note is the destination fret
         """
         for i, note in enumerate(notes):
             if not note.is_legato or i == 0:
@@ -331,43 +335,39 @@ class TechniqueDetector:
             
             prev_note = notes[i - 1]
             
-            # Must be on the same string for h/p
-            if prev_note.string != note.string:
-                continue
-            
             # Check timing - should be connected or very close
             gap = note.start_time - prev_note.end_time
-            if gap > 0.1:  # More than 100ms gap - not a legato phrase
+            if gap > 0.15:  # More than 150ms gap - not a legato phrase
                 continue
             
             pitch_diff = note.midi - prev_note.midi
             
+            # Allow cross-string legato (less common but possible)
+            # Same string is more reliable, but we'll accept cross-string too
+            same_string = (prev_note.string == note.string)
+            
+            # Minimum pitch change for h/p (at least 1 semitone)
+            if abs(pitch_diff) < 1:
+                continue
+            
             if pitch_diff > 0:
                 # Ascending = hammer-on
-                note.technique = TechniqueAnnotation(
-                    technique=Technique.HAMMER_ON,
-                    target_fret=note.fret,
-                    confidence=0.9
-                )
-                # The previous note leads into this one
-                prev_note.technique = TechniqueAnnotation(
-                    technique=Technique.HAMMER_ON,
-                    target_fret=note.fret,
-                    confidence=0.9
-                )
+                # Mark the SOURCE note (previous) with h and target
+                if prev_note.technique.technique == Technique.NONE:
+                    prev_note.technique = TechniqueAnnotation(
+                        technique=Technique.HAMMER_ON,
+                        target_fret=note.fret,
+                        confidence=0.9 if same_string else 0.7
+                    )
             elif pitch_diff < 0:
                 # Descending = pull-off
-                note.technique = TechniqueAnnotation(
-                    technique=Technique.PULL_OFF,
-                    target_fret=note.fret,
-                    confidence=0.9
-                )
-                # The previous note leads into this one
-                prev_note.technique = TechniqueAnnotation(
-                    technique=Technique.PULL_OFF,
-                    target_fret=note.fret,
-                    confidence=0.9
-                )
+                # Mark the SOURCE note (previous) with p and target
+                if prev_note.technique.technique == Technique.NONE:
+                    prev_note.technique = TechniqueAnnotation(
+                        technique=Technique.PULL_OFF,
+                        target_fret=note.fret,
+                        confidence=0.9 if same_string else 0.7
+                    )
     
     def _detect_bends(self, notes: List[AnnotatedNote]) -> None:
         """
@@ -494,6 +494,238 @@ class TechniqueDetector:
         # Very short notes with close timing are likely slides
         return note1.duration < 0.2
     
+    def _detect_vibrato(self, notes: List[AnnotatedNote], y: np.ndarray) -> None:
+        """
+        Detect vibrato by analyzing periodic pitch modulation within notes.
+        
+        Vibrato characteristics for guitar:
+        - Rate: 4-10 Hz (typical 5-7 Hz)
+        - Depth: 10-100 cents (subtle to wide)
+        - Regular, periodic oscillation
+        
+        Uses FFT on the pitch deviation signal to find dominant modulation frequency.
+        """
+        from scipy.fft import fft, fftfreq
+        
+        for note in notes:
+            # Skip if already has a technique or note is too short
+            if note.technique.technique != Technique.NONE:
+                continue
+            
+            if note.pitch_curve is None or len(note.pitch_curve) < 10:
+                continue
+            
+            # Need at least 0.2s for vibrato analysis
+            if note.duration < 0.2:
+                continue
+            
+            # Get valid pitch values (non-zero)
+            valid_curve = note.pitch_curve[note.pitch_curve > 0]
+            if len(valid_curve) < 10:
+                continue
+            
+            # Smooth the curve
+            smoothed = gaussian_filter1d(valid_curve.astype(float), sigma=1.0)
+            
+            # Detrend: remove linear trend and mean
+            x = np.arange(len(smoothed))
+            coeffs = np.polyfit(x, smoothed, 1)
+            trend = np.polyval(coeffs, x)
+            detrended = smoothed - trend
+            detrended = detrended - np.mean(detrended)
+            
+            # Check for sufficient pitch variation
+            pitch_std = np.std(detrended)
+            if pitch_std < 0.05:  # Less than 5 cents std - no vibrato
+                continue
+            
+            # Convert to cents for analysis (100 cents = 1 semitone)
+            cents_deviation = detrended * 100
+            
+            # FFT to find modulation frequency
+            n = len(cents_deviation)
+            dt = self.hop_length / self.sr  # Time per frame
+            
+            # Window and FFT
+            window = np.hanning(n)
+            spectrum = np.abs(fft(cents_deviation * window))[:n//2]
+            freqs = fftfreq(n, dt)[:n//2]
+            
+            # Focus on vibrato range (4-10 Hz)
+            vibrato_mask = (freqs >= 4.0) & (freqs <= 10.0)
+            
+            if not np.any(vibrato_mask):
+                continue
+            
+            vibrato_spectrum = spectrum.copy()
+            vibrato_spectrum[~vibrato_mask] = 0
+            
+            if np.max(vibrato_spectrum) < 1e-6:
+                continue
+            
+            # Find dominant vibrato frequency
+            peak_idx = np.argmax(vibrato_spectrum)
+            vibrato_rate = freqs[peak_idx]
+            peak_magnitude = spectrum[peak_idx]
+            
+            # Calculate regularity (energy at fundamental vs total)
+            fundamental_energy = peak_magnitude ** 2
+            total_energy = np.sum(spectrum ** 2)
+            regularity = fundamental_energy / (total_energy + 1e-10)
+            
+            # Calculate vibrato depth (peak-to-peak in cents)
+            depth_cents = np.std(cents_deviation) * 2.83  # ~= peak-to-peak for sinusoidal
+            
+            # Threshold checks for vibrato
+            if (4.0 <= vibrato_rate <= 10.0 and 
+                depth_cents >= 10.0 and  # At least 10 cents
+                depth_cents <= 150.0 and  # Not more than 1.5 semitones
+                regularity >= 0.15):  # Reasonably periodic
+                
+                note.technique = TechniqueAnnotation(
+                    technique=Technique.VIBRATO,
+                    confidence=min(1.0, regularity + depth_cents / 100)
+                )
+    
+    def _detect_trills(self, notes: List[AnnotatedNote], y: np.ndarray) -> None:
+        """
+        Detect trills by finding rapid alternation between two distinct pitches.
+        
+        Trill characteristics:
+        - Two distinct pitch centers (usually 1-2 semitones apart)
+        - Rapid alternation (6-15 Hz)
+        - Bimodal pitch distribution
+        """
+        for note in notes:
+            # Skip if already has a technique or note is too short
+            if note.technique.technique != Technique.NONE:
+                continue
+            
+            if note.pitch_curve is None or len(note.pitch_curve) < 15:
+                continue
+            
+            # Need at least 0.25s for trill analysis
+            if note.duration < 0.25:
+                continue
+            
+            # Get valid pitch values
+            valid_curve = note.pitch_curve[note.pitch_curve > 0]
+            if len(valid_curve) < 15:
+                continue
+            
+            # Convert to Hz for histogram analysis
+            valid_hz = librosa.midi_to_hz(valid_curve)
+            
+            # Create histogram to find pitch centers
+            # Use fine resolution (quarter-tone bins = 50 cents)
+            n_bins = int((np.max(valid_curve) - np.min(valid_curve)) / 0.25) + 1
+            n_bins = max(n_bins, 4)  # At least 4 bins
+            
+            hist, bin_edges = np.histogram(valid_curve, bins=n_bins)
+            
+            # Find peaks in histogram (pitch centers)
+            hist_smooth = gaussian_filter1d(hist.astype(float), sigma=0.5)
+            peaks, properties = find_peaks(hist_smooth, height=np.max(hist_smooth) * 0.25, distance=2)
+            
+            if len(peaks) < 2:
+                continue
+            
+            # Get the two strongest peaks
+            peak_heights = hist_smooth[peaks]
+            sorted_peak_idx = np.argsort(peak_heights)[::-1][:2]
+            top_peaks = peaks[sorted_peak_idx]
+            
+            # Calculate interval between pitch centers
+            peak_midis = (bin_edges[top_peaks] + bin_edges[top_peaks + 1]) / 2
+            interval = abs(peak_midis[1] - peak_midis[0])
+            
+            # Trills are typically 1-3 semitones
+            if not (0.8 <= interval <= 3.5):
+                continue
+            
+            # Verify rapid alternation by checking pitch crossings
+            mean_pitch = np.mean(valid_curve)
+            crossings = np.sum(np.diff(np.sign(valid_curve - mean_pitch)) != 0)
+            
+            # Calculate crossing rate
+            crossing_rate = crossings / note.duration
+            
+            # Trills should have 12-30 crossings per second (6-15 Hz oscillation)
+            if 10 <= crossing_rate <= 35:
+                note.technique = TechniqueAnnotation(
+                    technique=Technique.TRILL,
+                    target_fret=note.fret + round(interval),  # Upper note of trill
+                    confidence=min(1.0, crossing_rate / 20)
+                )
+    
+    def _detect_tremolo(self, notes: List[AnnotatedNote]) -> None:
+        """
+        Detect tremolo picking (rapid repeated notes at the same pitch).
+        
+        Tremolo characteristics:
+        - Same pitch repeated rapidly (8+ notes per second)
+        - Very short individual notes
+        - Minimal gaps between notes
+        """
+        if len(notes) < 3:
+            return
+        
+        # Track tremolo sections
+        i = 0
+        while i < len(notes) - 2:
+            # Skip if already has technique
+            if notes[i].technique.technique != Technique.NONE:
+                i += 1
+                continue
+            
+            # Start potential tremolo section
+            section_start = i
+            section_notes = [notes[i]]
+            base_midi = notes[i].midi
+            
+            j = i + 1
+            while j < len(notes):
+                note = notes[j]
+                prev_note = section_notes[-1]
+                
+                # Skip if already has technique
+                if note.technique.technique != Technique.NONE:
+                    break
+                
+                # Check if same pitch (within 1 semitone tolerance)
+                if abs(note.midi - base_midi) > 1:
+                    break
+                
+                # Check if rapid succession (max 80ms gap)
+                gap = note.start_time - prev_note.end_time
+                if gap > 0.08:
+                    break
+                
+                # Check if notes are short
+                if prev_note.duration > 0.15:
+                    break
+                
+                section_notes.append(note)
+                j += 1
+            
+            # Check if we have a tremolo section (3+ rapid notes)
+            if len(section_notes) >= 3:
+                # Calculate note rate
+                total_duration = (section_notes[-1].end_time - section_notes[0].start_time)
+                if total_duration > 0:
+                    rate = len(section_notes) / total_duration
+                    
+                    # Tremolo is typically 8+ notes per second
+                    if rate >= 8:
+                        # Mark all notes in section as tremolo
+                        for note in section_notes:
+                            note.technique = TechniqueAnnotation(
+                                technique=Technique.TREMOLO,
+                                confidence=min(1.0, rate / 15)  # Higher rate = higher confidence
+                            )
+            
+            i = max(j, i + 1)
+    
     def _print_stats(self, notes: List[AnnotatedNote]) -> None:
         """Print detection statistics."""
         stats = {
@@ -503,6 +735,9 @@ class TechniqueDetector:
             'bend': 0,
             'slide_up': 0,
             'slide_down': 0,
+            'vibrato': 0,
+            'trill': 0,
+            'tremolo': 0,
             'none': 0
         }
         
@@ -518,6 +753,12 @@ class TechniqueDetector:
                 stats['slide_up'] += 1
             elif tech == Technique.SLIDE_DOWN:
                 stats['slide_down'] += 1
+            elif tech == Technique.VIBRATO:
+                stats['vibrato'] += 1
+            elif tech == Technique.TRILL:
+                stats['trill'] += 1
+            elif tech == Technique.TREMOLO:
+                stats['tremolo'] += 1
             else:
                 stats['none'] += 1
         
@@ -528,6 +769,9 @@ class TechniqueDetector:
         print(f"    Bends (b): {stats['bend']}")
         print(f"    Slides up (/): {stats['slide_up']}")
         print(f"    Slides down (\\): {stats['slide_down']}")
+        print(f"    Vibrato (~): {stats['vibrato']}")
+        print(f"    Trills (tr): {stats['trill']}")
+        print(f"    Tremolo (*): {stats['tremolo']}")
         print(f"    Plain notes: {stats['none']}")
 
 

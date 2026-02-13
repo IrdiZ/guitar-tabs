@@ -146,6 +146,9 @@ def analyze_audio_techniques(
             'bend': sum(1 for n in annotated_notes if n.technique.technique == Technique.BEND),
             'slide_up': sum(1 for n in annotated_notes if n.technique.technique == Technique.SLIDE_UP),
             'slide_down': sum(1 for n in annotated_notes if n.technique.technique == Technique.SLIDE_DOWN),
+            'vibrato': sum(1 for n in annotated_notes if n.technique.technique == Technique.VIBRATO),
+            'trill': sum(1 for n in annotated_notes if n.technique.technique == Technique.TRILL),
+            'tremolo': sum(1 for n in annotated_notes if n.technique.technique == Technique.TREMOLO),
         }
     }
     
@@ -179,6 +182,9 @@ def format_detailed_output(
     lines.append(f"  Bends (b):        {tech['bend']}")
     lines.append(f"  Slides up (/):    {tech['slide_up']}")
     lines.append(f"  Slides down (\\):  {tech['slide_down']}")
+    lines.append(f"  Vibrato (~):      {tech.get('vibrato', 0)}")
+    lines.append(f"  Trills (tr):      {tech.get('trill', 0)}")
+    lines.append(f"  Tremolo (*):      {tech.get('tremolo', 0)}")
     lines.append("")
     
     # Legend
@@ -188,6 +194,9 @@ def format_detailed_output(
     lines.append("  7b9  = Bend at fret 7, reaching pitch of fret 9")
     lines.append("  5/7  = Slide up from fret 5 to fret 7")
     lines.append("  7\\5  = Slide down from fret 7 to fret 5")
+    lines.append("  5~   = Vibrato on fret 5")
+    lines.append("  tr5-7 = Trill between frets 5 and 7")
+    lines.append("  5*   = Tremolo picking on fret 5")
     lines.append("")
     
     # Detailed note list
@@ -285,10 +294,11 @@ Examples:
         output += "\n\n" + "=" * 60 + "\nTABLATURE:\n" + "=" * 60 + "\n"
         output += ascii_tab
     else:
+        tech = stats['techniques']
         output = f"""Guitar Technique Analysis
 ========================
 Notes: {stats['total_notes']} | Legato: {stats['legato_events']}
-Techniques: {stats['techniques']['hammer_on']}h {stats['techniques']['pull_off']}p {stats['techniques']['bend']}b {stats['techniques']['slide_up']}/ {stats['techniques']['slide_down']}\\
+Techniques: {tech['hammer_on']}h {tech['pull_off']}p {tech['bend']}b {tech['slide_up']}/ {tech['slide_down']}\\ {tech.get('vibrato', 0)}~ {tech.get('trill', 0)}tr {tech.get('tremolo', 0)}*
 
 {ascii_tab}
 """
