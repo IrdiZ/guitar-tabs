@@ -131,6 +131,18 @@ try:
 except ImportError:
     HAS_ENSEMBLE = False
 
+# Precise note segmentation (IMPROVED NOTE BOUNDARIES)
+try:
+    from note_segmentation import (
+        NoteSegmenter,
+        NoteSegment,
+        segment_notes,
+        convert_to_notes,
+    )
+    HAS_NOTE_SEGMENTATION = True
+except ImportError:
+    HAS_NOTE_SEGMENTATION = False
+
 # Music theory module for post-processing
 try:
     from music_theory import (
@@ -4212,6 +4224,10 @@ Examples:
     
     # Add audio preprocessing arguments
     add_preprocessing_args(parser)
+    
+    # Add frequency domain cleanup arguments
+    if HAS_FREQ_CLEANUP:
+        add_freq_cleanup_args(parser)
     
     args = parser.parse_args()
     
