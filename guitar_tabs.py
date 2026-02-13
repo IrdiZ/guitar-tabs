@@ -1844,7 +1844,43 @@ def detect_notes_from_audio(
         save_preprocessed: Optional path to save preprocessed audio
         crepe_model: CREPE model capacity ('tiny', 'small', 'medium', 'large', 'full')
     """
-    # Multi-detector voting - MOST ACCURATE for monophonic
+    # Multi-model ensemble - MOST ACCURATE (runs pyin, cqt, crepe, basic_pitch, piptrack)
+    if pitch_method == 'ensemble':
+        if not HAS_ENSEMBLE:
+            print("⚠️  ensemble_pitch module not available, falling back to voting")
+            pitch_method = 'voting'
+        else:
+            from ensemble_pitch import EnsembleConfig, detect_notes_ensemble
+            
+            config = EnsembleConfig(
+                min_votes=2,
+                min_confidence=confidence_threshold,
+                min_duration=min_note_duration,
+                crepe_model=crepe_model
+            )
+            
+            consensus_notes = detect_notes_ensemble(
+                audio_path,
+                config=config,
+                sr=22050,
+                use_harmonic_separation=use_harmonic_separation
+            )
+            
+            # Convert ConsensusNote to Note objects
+            notes = [
+                Note(
+                    midi=cn.midi_note,
+                    start_time=cn.start_time,
+                    duration=cn.duration,
+                    confidence=cn.confidence
+                )
+                for cn in consensus_notes
+            ]
+            
+            print(f"Ensemble detected {len(notes)} notes")
+            return notes
+    
+    # Multi-detector voting - legacy method
     if pitch_method == 'voting':
         if not HAS_PITCH_ACCURACY:
             print("⚠️  pitch_accuracy module not available, falling back to pYIN")
@@ -2692,6 +2728,11 @@ def detect_notes_polyphonic(
     for count in sorted(polyphony_counts.keys()):
         if count > 1:
             print(f"    {count} simultaneous notes: {polyphony_counts[count]} times")
+    
+    # Apply octave correction
+    if HAS_OCTAVE_CORRECTION and len(all_notes) > 0:
+        print("Applying octave correction...")
+        all_notes = _apply_octave_correction_to_notes(y, sr, all_notes, tuning)
     
     return all_notes
 
