@@ -81,6 +81,32 @@ try:
 except ImportError:
     HAS_CREPE = False
 
+# Accurate pitch detection with multi-detector voting
+try:
+    from pitch_accuracy import (
+        AccuratePitchDetector,
+        detect_pitches_accurate,
+        compare_detectors,
+        GUITAR_MIN_MIDI,
+        GUITAR_MAX_MIDI
+    )
+    HAS_PITCH_ACCURACY = True
+except ImportError:
+    HAS_PITCH_ACCURACY = False
+
+# Octave correction using harmonic analysis
+try:
+    from octave_correction import (
+        OctaveCorrector,
+        OctaveCorrectionResult,
+        OctaveCorrection,
+        apply_octave_correction,
+        validate_guitar_range
+    )
+    HAS_OCTAVE_CORRECTION = True
+except ImportError:
+    HAS_OCTAVE_CORRECTION = False
+
 # Music theory module for post-processing
 try:
     from music_theory import (
@@ -1576,12 +1602,195 @@ def suppress_harmonics(midi_notes: List[int], min_interval: float = 0.05) -> Lis
     return filtered
 
 
+def detect_notes_with_voting(
+    audio_path: str,
+    hop_length: int = 512,
+    min_note_duration: float = 0.05,
+    confidence_threshold: float = 0.3,
+    use_harmonic_separation: bool = True,
+    tuning: List[int] = None,
+    preprocess_config: Optional[PreprocessingConfig] = None,
+    save_preprocessed: Optional[str] = None,
+    min_votes: int = 2,
+    verbose: bool = True
+) -> List[Note]:
+    """
+    Detect notes using multi-detector voting for maximum accuracy.
+    
+    This method runs multiple pitch detectors (pYIN, CQT, piptrack, YIN)
+    and uses consensus voting to determine the correct pitch. This approach:
+    
+    1. Filters out detector-specific errors
+    2. Resolves octave ambiguities
+    3. Enforces guitar range constraints (E2-E6)
+    4. Tracks pitch continuity to prevent random jumps
+    
+    Args:
+        audio_path: Path to audio file
+        hop_length: Hop length for analysis
+        min_note_duration: Minimum note duration in seconds
+        confidence_threshold: Minimum confidence for note detection
+        use_harmonic_separation: Whether to use HPSS preprocessing
+        tuning: Guitar tuning (MIDI notes)
+        preprocess_config: Optional preprocessing configuration
+        save_preprocessed: Optional path to save preprocessed audio
+        min_votes: Minimum detector votes for consensus
+        verbose: Print diagnostic info
+        
+    Returns:
+        List of detected Note objects
+    """
+    if tuning is None:
+        tuning = TUNINGS['standard']
+    
+    print(f"🎯 Loading audio: {audio_path}")
+    y, sr = librosa.load(audio_path, sr=22050, mono=True)
+    
+    # Apply audio preprocessing if configured
+    if preprocess_config and preprocess_config.enabled:
+        print("\n🔧 Applying audio preprocessing pipeline...")
+        y = preprocess_audio(y, sr, preprocess_config, verbose=True)
+        print()
+        
+        if save_preprocessed:
+            print(f"💾 Saving preprocessed audio to: {save_preprocessed}")
+            sf.write(save_preprocessed, y, sr)
+    
+    # Optional: Extract harmonic component for cleaner pitch detection
+    if use_harmonic_separation:
+        print("Separating harmonic component...")
+        y_pitch = extract_harmonic_component(y, sr)
+    else:
+        y_pitch = y
+    
+    # Run accurate pitch detection with voting
+    print(f"\n🎯 Running multi-detector voting (min_votes={min_votes})...")
+    
+    f0, confidence, pitch_details = detect_pitches_accurate(
+        y_pitch, sr, hop_length,
+        min_votes=min_votes,
+        min_confidence=confidence_threshold,
+        verbose=verbose
+    )
+    
+    # Detect onsets using ensemble method
+    print("\nDetecting onsets with ensemble method...")
+    onset_times, onset_details = detect_onsets_ensemble(
+        y=y,
+        sr=sr,
+        hop_length=hop_length,
+        min_votes=2,
+        attack_detection=True,
+        legato_detection=True,
+        legato_sensitivity=0.4,
+        verbose=verbose
+    )
+    
+    # Apply backtracking to refine onset times
+    if len(onset_times) > 0:
+        onset_times = apply_onset_backtracking(y, sr, onset_times, hop_length)
+    
+    print(f"Found {len(onset_times)} onsets (ensemble)")
+    
+    # Convert frame-based pitches to note events at onsets
+    notes = []
+    frame_times = librosa.frames_to_time(np.arange(len(f0)), sr=sr, hop_length=hop_length)
+    audio_duration = librosa.get_duration(y=y, sr=sr)
+    
+    for i, onset_time in enumerate(onset_times):
+        # Find the frame closest to this onset
+        onset_frame = int(onset_time * sr / hop_length)
+        
+        if onset_frame >= len(f0):
+            continue
+        
+        # Look at a window around onset for stability
+        window_start = max(0, onset_frame)
+        window_end = min(len(f0), onset_frame + 5)
+        
+        # Get valid pitches in window
+        valid_pitches = []
+        valid_confs = []
+        for frame in range(window_start, window_end):
+            if frame < len(pitch_details) and pitch_details[frame].is_valid and pitch_details[frame].midi > 0:
+                valid_pitches.append(pitch_details[frame].midi)
+                valid_confs.append(pitch_details[frame].confidence)
+        
+        if not valid_pitches:
+            continue
+        
+        # Use most common pitch (mode) with highest confidence
+        from collections import Counter
+        pitch_counts = Counter(valid_pitches)
+        most_common = pitch_counts.most_common(1)[0]
+        midi_note = most_common[0]
+        
+        # Calculate confidence as average of matching pitches
+        matching_confs = [c for p, c in zip(valid_pitches, valid_confs) if p == midi_note]
+        note_confidence = np.mean(matching_confs) if matching_confs else 0.5
+        
+        # Get onset details for legato detection
+        onset_detail = None
+        for detail in onset_details:
+            if abs(detail.time - onset_time) < 0.05:
+                onset_detail = detail
+                break
+        
+        # Legato notes get lower confidence threshold
+        effective_threshold = confidence_threshold
+        if onset_detail and onset_detail.is_legato:
+            effective_threshold = confidence_threshold * 0.6
+        
+        if note_confidence < effective_threshold:
+            continue
+        
+        # Verify guitar range (E2=40 to E6=88)
+        if midi_note < 40 or midi_note > 88:
+            continue
+        
+        # Estimate duration
+        if i < len(onset_times) - 1:
+            duration = onset_times[i + 1] - onset_time
+        else:
+            duration = audio_duration - onset_time
+        
+        # Minimum duration check
+        effective_min_duration = min_note_duration
+        if onset_detail and onset_detail.is_legato:
+            effective_min_duration = min_note_duration * 0.7
+        
+        if duration < effective_min_duration:
+            continue
+        
+        notes.append(Note(
+            midi=midi_note,
+            start_time=onset_time,
+            duration=duration,
+            confidence=float(note_confidence)
+        ))
+    
+    # Post-process: suppress obvious harmonics
+    print("Filtering harmonics...")
+    notes = filter_harmonic_notes(notes)
+    
+    print(f"\n✅ Detected {len(notes)} notes with voting consensus")
+    
+    # Print note distribution
+    if notes and verbose:
+        midi_notes = [n.midi for n in notes]
+        note_names = [NOTE_NAMES[m % 12] for m in midi_notes]
+        print(f"   Range: {NOTE_NAMES[min(midi_notes) % 12]}{min(midi_notes)//12-1} to {NOTE_NAMES[max(midi_notes) % 12]}{max(midi_notes)//12-1}")
+        print(f"   Most common: {Counter(note_names).most_common(3)}")
+    
+    return notes
+
+
 def detect_notes_from_audio(
     audio_path: str,
     hop_length: int = 512,
     min_note_duration: float = 0.05,
     confidence_threshold: float = 0.5,
-    pitch_method: str = 'pyin',
+    pitch_method: str = 'voting',
     use_harmonic_separation: bool = True,
     median_filter_size: int = 5,
     tuning: List[int] = None,
@@ -1597,11 +1806,12 @@ def detect_notes_from_audio(
         hop_length: Hop length for STFT
         min_note_duration: Minimum note duration in seconds
         confidence_threshold: Minimum confidence for note detection
-        pitch_method: 'pyin', 'piptrack', 'cqt', 'crepe', or 'basicpitch'
-            - pyin: Fast, good for monophonic (default)
+        pitch_method: 'voting', 'pyin', 'piptrack', 'cqt', 'crepe', or 'basicpitch'
+            - voting: Multi-detector consensus (default, MOST ACCURATE)
+            - pyin: Fast, good for monophonic
             - piptrack: Alternative monophonic
             - cqt: Constant-Q transform based
-            - crepe: Deep learning, most accurate for monophonic
+            - crepe: Deep learning (requires tensorflow)
             - basicpitch: Polyphonic - best for chords (requires Docker)
         use_harmonic_separation: Whether to use HPSS
         median_filter_size: Size of median filter for pitch smoothing
@@ -1610,6 +1820,23 @@ def detect_notes_from_audio(
         save_preprocessed: Optional path to save preprocessed audio
         crepe_model: CREPE model capacity ('tiny', 'small', 'medium', 'large', 'full')
     """
+    # Multi-detector voting - MOST ACCURATE for monophonic
+    if pitch_method == 'voting':
+        if not HAS_PITCH_ACCURACY:
+            print("⚠️  pitch_accuracy module not available, falling back to pYIN")
+            pitch_method = 'pyin'
+        else:
+            return detect_notes_with_voting(
+                audio_path=audio_path,
+                hop_length=hop_length,
+                min_note_duration=min_note_duration,
+                confidence_threshold=confidence_threshold,
+                use_harmonic_separation=use_harmonic_separation,
+                tuning=tuning,
+                preprocess_config=preprocess_config,
+                save_preprocessed=save_preprocessed
+            )
+    
     # Basic Pitch is a special case - it does its own audio loading
     # and returns notes directly (polyphonic detection via Docker)
     if pitch_method == 'basicpitch':
