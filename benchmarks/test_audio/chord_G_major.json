@@ -1,0 +1,77 @@
+{
+  "name": "chord_G_major",
+  "sample_rate": 22050,
+  "duration": 2.0,
+  "notes": [
+    {
+      "midi_note": 43,
+      "note_name": "G2",
+      "frequency_hz": 97.99885899543733,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 47,
+      "note_name": "B2",
+      "frequency_hz": 123.47082531403103,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 50,
+      "note_name": "D3",
+      "frequency_hz": 146.8323839587038,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 55,
+      "note_name": "G3",
+      "frequency_hz": 195.99771799087463,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 59,
+      "note_name": "B3",
+      "frequency_hz": 246.94165062806206,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 67,
+      "note_name": "G4",
+      "frequency_hz": 391.99543598174927,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    }
+  ],
+  "metadata": {
+    "type": "chord",
+    "chord": "G_major"
+  }
+}

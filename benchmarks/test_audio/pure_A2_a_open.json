@@ -1,0 +1,21 @@
+{
+  "name": "pure_A2_a_open",
+  "sample_rate": 22050,
+  "duration": 1.6,
+  "notes": [
+    {
+      "midi_note": 45,
+      "note_name": "A2",
+      "frequency_hz": 110.0,
+      "start_time": 0.1,
+      "end_time": 1.1,
+      "duration": 1.0,
+      "velocity": 0.8,
+      "string": null,
+      "fret": null
+    }
+  ],
+  "metadata": {
+    "type": "pure_tone"
+  }
+}

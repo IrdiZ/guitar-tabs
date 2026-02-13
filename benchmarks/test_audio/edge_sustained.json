@@ -1,0 +1,22 @@
+{
+  "name": "edge_sustained",
+  "sample_rate": 22050,
+  "duration": 5.5,
+  "notes": [
+    {
+      "midi_note": 48,
+      "note_name": "C3",
+      "frequency_hz": 130.8127826502993,
+      "start_time": 0.1,
+      "end_time": 5.0,
+      "duration": 4.9,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    }
+  ],
+  "metadata": {
+    "type": "edge_case",
+    "case": "sustained"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "name": "chord_A_major",
+  "sample_rate": 22050,
+  "duration": 2.0,
+  "notes": [
+    {
+      "midi_note": 45,
+      "note_name": "A2",
+      "frequency_hz": 110.0,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 52,
+      "note_name": "E3",
+      "frequency_hz": 164.81377845643496,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 57,
+      "note_name": "A3",
+      "frequency_hz": 220.0,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 61,
+      "note_name": "C#4",
+      "frequency_hz": 277.1826309768721,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 64,
+      "note_name": "E4",
+      "frequency_hz": 329.6275569128699,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    }
+  ],
+  "metadata": {
+    "type": "chord",
+    "chord": "A_major"
+  }
+}

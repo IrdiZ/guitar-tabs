@@ -1,74 +1,79 @@
-# 🎸 Guitar Tab Generator
+# 🎸 Guitar Tab Transcription
 
-AI-powered tool to generate guitar tablature from audio files or YouTube URLs.
+Audio-to-tablature transcription using multiple approaches.
 
-Built for songs with no existing tabs online (like obscure Albanian music).
+## Existing Implementation
 
-## Features
+This directory contains a custom-built guitar tab generator (`guitar_tabs.py`) with:
+- **Pitch Detection**: pyin, piptrack, polyphonic NMF
+- **Onset Detection**: Spectral flux + complex domain + HFC voting
+- **Music Theory**: Key detection, scale filtering, chord recognition
+- **Playability**: Fret optimization, impossible transition filtering
+- **Export**: ASCII tabs, MusicXML, Guitar Pro
 
-- **Audio → Tabs**: Upload any audio file (mp3, wav, etc.)
-- **YouTube Support**: Paste a YouTube URL, get tabs
-- **Smart Fret Mapping**: AI chooses playable positions
-- **ASCII Output**: Standard guitar tab format
+### Usage
+```bash
+# Basic usage
+python guitar_tabs.py audio.mp3 -o output.txt
+
+# With polyphonic detection (chords)
+python guitar_tabs.py audio.mp3 --polyphonic
+
+# Export to Guitar Pro
+python guitar_tabs.py audio.mp3 -o output.gp5 --format gp5
+```
+
+---
+
+## ML-Enhanced Approaches
 
 ## Quick Start
 
+### Option 1: Online (No Install)
+Just use the web demos:
+- **Spotify Basic Pitch**: https://basicpitch.spotify.com
+- **Demucs (Guitar Isolation)**: https://huggingface.co/spaces/akhaliq/demucs
+
+### Option 2: Local Installation
+
 ```bash
-# Install dependencies
-pip install librosa numpy soundfile yt-dlp
+# Use Python 3.10/3.11 (not 3.13)
+python3.11 -m venv venv
+source venv/bin/activate
+pip install basic-pitch demucs pretty_midi
 
-# From local file
-python guitar_tabs.py song.mp3 -o tabs.txt
+# Transcribe guitar audio to MIDI
+python transcribe.py guitar_solo.mp3 -o output/
 
-# From YouTube
-python guitar_tabs.py "https://youtube.com/watch?v=..." -o tabs.txt
-
-# Lower confidence threshold for noisy audio
-python guitar_tabs.py song.mp3 -c 0.1
+# For full band recordings, isolate guitar first
+python transcribe.py song.mp3 --isolate -o output/
 ```
 
-## How It Works
+## Files
 
-1. **Pitch Detection**: Uses librosa to analyze audio frequencies
-2. **Note Onset Detection**: Identifies when notes start
-3. **MIDI Conversion**: Converts frequencies to musical notes
-4. **Fret Mapping**: Maps notes to guitar positions considering:
-   - Playability (prefers lower frets)
-   - Hand continuity (minimizes jumps)
-   - String preference (middle strings easier)
+| File | Description |
+|------|-------------|
+| `RESEARCH.md` | Comprehensive research on AMT approaches |
+| `transcribe.py` | Main transcription CLI tool |
+| `requirements.txt` | Python dependencies |
 
-## Output Example
+## Best Models
+
+| Use Case | Model | Install |
+|----------|-------|---------|
+| Quick MIDI output | Basic Pitch | `pip install basic-pitch` |
+| Guitar isolation | Demucs htdemucs_6s | `pip install demucs` |
+| Actual tabs (fret/string) | trimplexx CRNN | See RESEARCH.md |
+
+## Pipeline
 
 ```
-e|----------------|
-B|----------------|
-G|----2-------0---|
-D|--------0-------|
-A|----------------|
-E|----------------|
+Full Band Mix → Demucs (isolate guitar) → Basic Pitch → MIDI → ASCII Tab
 ```
 
-## Limitations
+## Links
 
-- Works best with clean guitar audio (no vocals/drums)
-- Use [Moises.ai](https://moises.ai) to extract guitar stem first
-- Polyphonic detection (chords) is experimental
-
-## Tech Stack
-
-- Python 3.11+
-- librosa (audio analysis)
-- numpy (signal processing)
-- yt-dlp (YouTube download)
-
-## License
-
-MIT
-
-## Contributing
-
-PRs welcome! Ideas:
-- [ ] Guitar Pro export (.gp5)
-- [ ] Chord detection
-- [ ] Web UI
-- [ ] Better polyphonic support
+- [Basic Pitch (Spotify)](https://github.com/spotify/basic-pitch)
+- [Demucs (Meta)](https://github.com/facebookresearch/demucs)
+- [CRNN Tabs](https://github.com/trimplexx/music-transcription)
+- [GuitarSet Dataset](https://guitarset.weebly.com)

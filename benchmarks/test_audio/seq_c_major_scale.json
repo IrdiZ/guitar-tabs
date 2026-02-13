@@ -1,0 +1,99 @@
+{
+  "name": "seq_c_major_scale",
+  "sample_rate": 22050,
+  "duration": 4.449977324263038,
+  "notes": [
+    {
+      "midi_note": 48,
+      "note_name": "C3",
+      "frequency_hz": 130.8127826502993,
+      "start_time": 0.0,
+      "end_time": 0.45,
+      "duration": 0.45,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 50,
+      "note_name": "D3",
+      "frequency_hz": 146.8323839587038,
+      "start_time": 0.5,
+      "end_time": 0.95,
+      "duration": 0.44999999999999996,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 52,
+      "note_name": "E3",
+      "frequency_hz": 164.81377845643496,
+      "start_time": 1.0,
+      "end_time": 1.45,
+      "duration": 0.44999999999999996,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 53,
+      "note_name": "F3",
+      "frequency_hz": 174.61411571650194,
+      "start_time": 1.5,
+      "end_time": 1.95,
+      "duration": 0.44999999999999996,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 55,
+      "note_name": "G3",
+      "frequency_hz": 195.99771799087463,
+      "start_time": 2.0,
+      "end_time": 2.45,
+      "duration": 0.4500000000000002,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 57,
+      "note_name": "A3",
+      "frequency_hz": 220.0,
+      "start_time": 2.5,
+      "end_time": 2.95,
+      "duration": 0.4500000000000002,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 59,
+      "note_name": "B3",
+      "frequency_hz": 246.94165062806206,
+      "start_time": 3.0,
+      "end_time": 3.45,
+      "duration": 0.4500000000000002,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 60,
+      "note_name": "C4",
+      "frequency_hz": 261.6255653005986,
+      "start_time": 3.5,
+      "end_time": 3.95,
+      "duration": 0.4500000000000002,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    }
+  ],
+  "metadata": {
+    "type": "sequence",
+    "scale": "C_major"
+  }
+}

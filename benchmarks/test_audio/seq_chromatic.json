@@ -1,0 +1,154 @@
+{
+  "name": "seq_chromatic",
+  "sample_rate": 22050,
+  "duration": 4.38,
+  "notes": [
+    {
+      "midi_note": 48,
+      "note_name": "C3",
+      "frequency_hz": 130.8127826502993,
+      "start_time": 0.0,
+      "end_time": 0.27999999999999997,
+      "duration": 0.27999999999999997,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 49,
+      "note_name": "C#3",
+      "frequency_hz": 138.59131548843604,
+      "start_time": 0.3,
+      "end_time": 0.58,
+      "duration": 0.27999999999999997,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 50,
+      "note_name": "D3",
+      "frequency_hz": 146.8323839587038,
+      "start_time": 0.6,
+      "end_time": 0.8799999999999999,
+      "duration": 0.2799999999999999,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 51,
+      "note_name": "D#3",
+      "frequency_hz": 155.56349186104046,
+      "start_time": 0.8999999999999999,
+      "end_time": 1.18,
+      "duration": 0.28,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 52,
+      "note_name": "E3",
+      "frequency_hz": 164.81377845643496,
+      "start_time": 1.2,
+      "end_time": 1.48,
+      "duration": 0.28,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 53,
+      "note_name": "F3",
+      "frequency_hz": 174.61411571650194,
+      "start_time": 1.5,
+      "end_time": 1.7799999999999998,
+      "duration": 0.2799999999999998,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 54,
+      "note_name": "F#3",
+      "frequency_hz": 184.9972113558172,
+      "start_time": 1.7999999999999998,
+      "end_time": 2.08,
+      "duration": 0.28000000000000025,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 55,
+      "note_name": "G3",
+      "frequency_hz": 195.99771799087463,
+      "start_time": 2.1,
+      "end_time": 2.38,
+      "duration": 0.2799999999999998,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 56,
+      "note_name": "G#3",
+      "frequency_hz": 207.65234878997256,
+      "start_time": 2.4,
+      "end_time": 2.6799999999999997,
+      "duration": 0.2799999999999998,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 57,
+      "note_name": "A3",
+      "frequency_hz": 220.0,
+      "start_time": 2.6999999999999997,
+      "end_time": 2.98,
+      "duration": 0.28000000000000025,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 58,
+      "note_name": "A#3",
+      "frequency_hz": 233.08188075904496,
+      "start_time": 3.0,
+      "end_time": 3.28,
+      "duration": 0.2799999999999998,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 59,
+      "note_name": "B3",
+      "frequency_hz": 246.94165062806206,
+      "start_time": 3.3,
+      "end_time": 3.5799999999999996,
+      "duration": 0.2799999999999998,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 60,
+      "note_name": "C4",
+      "frequency_hz": 261.6255653005986,
+      "start_time": 3.5999999999999996,
+      "end_time": 3.88,
+      "duration": 0.28000000000000025,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    }
+  ],
+  "metadata": {
+    "type": "sequence",
+    "scale": "chromatic"
+  }
+}

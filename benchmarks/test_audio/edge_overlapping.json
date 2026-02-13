@@ -1,0 +1,44 @@
+{
+  "name": "edge_overlapping",
+  "sample_rate": 22050,
+  "duration": 2.1,
+  "notes": [
+    {
+      "midi_note": 48,
+      "note_name": "C3",
+      "frequency_hz": 130.8127826502993,
+      "start_time": 0.1,
+      "end_time": 0.8,
+      "duration": 0.7000000000000001,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 50,
+      "note_name": "D3",
+      "frequency_hz": 146.8323839587038,
+      "start_time": 0.5,
+      "end_time": 1.2,
+      "duration": 0.7,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 52,
+      "note_name": "E3",
+      "frequency_hz": 164.81377845643496,
+      "start_time": 0.9,
+      "end_time": 1.6,
+      "duration": 0.7000000000000001,
+      "velocity": 1.0,
+      "string": null,
+      "fret": null
+    }
+  ],
+  "metadata": {
+    "type": "edge_case",
+    "case": "overlap"
+  }
+}

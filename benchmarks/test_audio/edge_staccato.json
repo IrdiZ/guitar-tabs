@@ -1,0 +1,22 @@
+{
+  "name": "edge_staccato",
+  "sample_rate": 22050,
+  "duration": 0.6499773242630386,
+  "notes": [
+    {
+      "midi_note": 60,
+      "note_name": "C4",
+      "frequency_hz": 261.6255653005986,
+      "start_time": 0.1,
+      "end_time": 0.15,
+      "duration": 0.04999999999999999,
+      "velocity": 0.8,
+      "string": null,
+      "fret": null
+    }
+  ],
+  "metadata": {
+    "type": "edge_case",
+    "case": "short"
+  }
+}

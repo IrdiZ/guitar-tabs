@@ -1,0 +1,22 @@
+{
+  "name": "edge_quiet_note",
+  "sample_rate": 22050,
+  "duration": 1.6,
+  "notes": [
+    {
+      "midi_note": 52,
+      "note_name": "E3",
+      "frequency_hz": 164.81377845643496,
+      "start_time": 0.1,
+      "end_time": 1.1,
+      "duration": 1.0,
+      "velocity": 0.15,
+      "string": null,
+      "fret": null
+    }
+  ],
+  "metadata": {
+    "type": "edge_case",
+    "case": "quiet"
+  }
+}

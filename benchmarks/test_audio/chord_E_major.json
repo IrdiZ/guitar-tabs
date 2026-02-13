@@ -1,0 +1,77 @@
+{
+  "name": "chord_E_major",
+  "sample_rate": 22050,
+  "duration": 2.0,
+  "notes": [
+    {
+      "midi_note": 40,
+      "note_name": "E2",
+      "frequency_hz": 82.4068892282175,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 47,
+      "note_name": "B2",
+      "frequency_hz": 123.47082531403103,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 52,
+      "note_name": "E3",
+      "frequency_hz": 164.81377845643496,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 56,
+      "note_name": "G#3",
+      "frequency_hz": 207.65234878997256,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 59,
+      "note_name": "B3",
+      "frequency_hz": 246.94165062806206,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    },
+    {
+      "midi_note": 64,
+      "note_name": "E4",
+      "frequency_hz": 329.6275569128699,
+      "start_time": 0.1,
+      "end_time": 1.5,
+      "duration": 1.4,
+      "velocity": 0.7,
+      "string": null,
+      "fret": null
+    }
+  ],
+  "metadata": {
+    "type": "chord",
+    "chord": "E_major"
+  }
+}

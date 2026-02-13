@@ -48,6 +48,18 @@ from preprocessing import (
     add_preprocessing_args
 )
 
+# String detection module for spectral-based string identification
+try:
+    from string_detection import (
+        StringDetector,
+        choose_string_position_spectral,
+        compute_string_brightness_profile,
+        STRING_NAMES as STRING_DETECTION_NAMES
+    )
+    HAS_STRING_DETECTION = True
+except ImportError:
+    HAS_STRING_DETECTION = False
+
 # Guitar Pro support
 try:
     import guitarpro
@@ -72,6 +84,26 @@ try:
     HAS_MUSIC_THEORY = True
 except ImportError:
     HAS_MUSIC_THEORY = False
+
+# Fingering optimizer module
+try:
+    from fingering_optimizer import (
+        FingeringOptimizer, FingeringConfig, optimize_fingering,
+        compare_fingerings
+    )
+    HAS_FINGERING_OPTIMIZER = True
+except ImportError:
+    HAS_FINGERING_OPTIMIZER = False
+
+# Rhythm notation module
+try:
+    from rhythm_notation import (
+        detect_tempo, analyze_audio_rhythm, format_tab_with_rhythm,
+        format_rhythm_line, analyze_rhythm, TempoInfo
+    )
+    HAS_RHYTHM_NOTATION = True
+except ImportError:
+    HAS_RHYTHM_NOTATION = False
 
 # Basic Pitch support via Docker
 import json
@@ -2339,6 +2371,124 @@ def notes_to_tabs(notes: List[Note], tuning: List[int] = None) -> List[TabNote]:
     return tab_notes
 
 
+def notes_to_tabs_spectral(
+    notes: List[Note], 
+    audio_path: str = None,
+    y: np.ndarray = None,
+    sr: int = 22050,
+    tuning: List[int] = None,
+    verbose: bool = False
+) -> List[TabNote]:
+    """
+    Convert detected notes to guitar tab positions using spectral string detection.
+    
+    This enhanced version uses timbre/spectral analysis to determine which string
+    a note was most likely played on, rather than just using heuristics.
+    
+    Different guitar strings have characteristic timbral qualities:
+    - Lower strings (E, A, D): warmer, more bass, lower spectral centroid
+    - Higher strings (G, B, e): brighter, more treble, higher spectral centroid
+    
+    Args:
+        notes: List of Note objects with midi, start_time, duration
+        audio_path: Path to audio file (will be loaded if y not provided)
+        y: Pre-loaded audio signal (optional)
+        sr: Sample rate for y
+        tuning: Guitar tuning as MIDI notes
+        verbose: Print detection details
+        
+    Returns:
+        List of TabNote objects with string/fret assignments
+    """
+    if tuning is None:
+        tuning = TUNINGS['standard']
+    
+    # Check if string detection is available
+    if not HAS_STRING_DETECTION:
+        print("⚠️  String detection module not available, using basic heuristics")
+        return notes_to_tabs(notes, tuning)
+    
+    # Load audio if not provided
+    if y is None:
+        if audio_path is None:
+            print("⚠️  No audio data provided for spectral analysis, using basic heuristics")
+            return notes_to_tabs(notes, tuning)
+        
+        if verbose:
+            print(f"Loading audio for spectral string detection: {audio_path}")
+        y, sr = librosa.load(audio_path, sr=sr, mono=True)
+    
+    # Analyze audio brightness profile
+    if verbose:
+        profile = compute_string_brightness_profile(y, sr)
+        print(f"📊 Audio brightness: {profile['brightness_category']} "
+              f"(centroid: {profile['mean_centroid']:.0f} Hz)")
+    
+    # Create string detector
+    detector = StringDetector(sr=sr, tuning=tuning)
+    
+    tab_notes = []
+    prev_position = None
+    
+    confidence_sum = 0.0
+    spectral_count = 0
+    fallback_count = 0
+    
+    for i, note in enumerate(notes):
+        # Try spectral detection
+        pred = detector.predict_string(
+            y,
+            note.midi,
+            note.start_time,
+            note.duration,
+            prev_position=prev_position,
+            verbose=verbose
+        )
+        
+        if pred.string >= 0 and pred.confidence >= 0.3:
+            # Use spectral prediction
+            tab_note = TabNote(
+                string=pred.string,
+                fret=pred.fret,
+                start_time=note.start_time,
+                duration=note.duration
+            )
+            confidence_sum += pred.confidence
+            spectral_count += 1
+            
+            if verbose:
+                alt_info = ""
+                if pred.alternative_positions:
+                    alts = [(STRING_NAMES[s], f) for s, f, _ in pred.alternative_positions[:2]]
+                    alt_info = f" (alts: {alts})"
+                print(f"  Note {i+1}: {note.name} -> {STRING_NAMES[pred.string]} fret {pred.fret} "
+                      f"({pred.confidence:.0%}){alt_info}")
+        else:
+            # Fall back to heuristic method
+            tab_note = choose_best_fret_position(note, prev_position, tuning)
+            fallback_count += 1
+            
+            if verbose and tab_note:
+                print(f"  Note {i+1}: {note.name} -> {STRING_NAMES[tab_note.string]} fret {tab_note.fret} "
+                      f"(heuristic fallback)")
+        
+        if tab_note:
+            tab_notes.append(tab_note)
+            prev_position = (tab_note.string, tab_note.fret)
+    
+    # Print summary
+    total = spectral_count + fallback_count
+    if total > 0 and (verbose or spectral_count > 0):
+        avg_conf = confidence_sum / spectral_count if spectral_count > 0 else 0
+        print(f"\n🎸 String detection summary:")
+        print(f"   Spectral detection: {spectral_count}/{total} notes ({100*spectral_count/total:.0f}%)")
+        print(f"   Average confidence: {avg_conf:.0%}")
+        if fallback_count > 0:
+            print(f"   Heuristic fallback: {fallback_count} notes")
+    
+    return tab_notes
+
+
 # ============================================================================
 # CHORD DETECTION
 # ============================================================================
@@ -3096,6 +3246,381 @@ def export_musicxml(
         return False
 
 
+def export_lilypond(
+    tab_notes: List[TabNote],
+    notes: List[Note],
+    output_path: str,
+    title: str = "Generated Tab",
+    composer: str = "Guitar Tab Generator",
+    tempo: int = 120,
+    tuning: List[int] = None,
+    chords: Optional[List['Chord']] = None,
+    include_standard_notation: bool = True
+) -> bool:
+    """
+    Export tab notes to LilyPond format (.ly) for beautiful PDF generation.
+    
+    LilyPond is a free music engraving program that produces publication-quality
+    sheet music. After exporting, run: lilypond filename.ly
+    
+    Features:
+    - Guitar tablature with fret numbers
+    - Standard notation (optional)
+    - Technique markings (hammer-ons, pull-offs, slides, bends)
+    - Chord symbols above the staff
+    - Custom tuning support
+    - Proper rhythmic notation
+    
+    Args:
+        tab_notes: List of TabNote objects
+        notes: List of Note objects (for MIDI pitch info)
+        output_path: Path to save the .ly file
+        title: Song title
+        composer: Composer/artist name
+        tempo: Tempo in BPM
+        tuning: Guitar tuning as MIDI note numbers
+        chords: Optional list of detected chords
+        include_standard_notation: Include standard notation staff above tab
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if tuning is None:
+        tuning = TUNINGS['standard']
+    
+    if not tab_notes:
+        print("❌ No notes to export")
+        return False
+    
+    # LilyPond note name mapping (MIDI pitch class to LilyPond name)
+    LILYPOND_NOTES = ['c', 'cis', 'd', 'dis', 'e', 'f', 'fis', 'g', 'gis', 'a', 'ais', 'b']
+    
+    def midi_to_lilypond_pitch(midi: int) -> str:
+        """Convert MIDI note number to LilyPond pitch notation."""
+        pitch_class = midi % 12
+        octave = (midi // 12) - 1  # MIDI octave to LilyPond octave
+        
+        note_name = LILYPOND_NOTES[pitch_class]
+        
+        # LilyPond uses ' for octaves above middle C (c' = middle C = MIDI 60)
+        # and , for octaves below
+        # c' = MIDI 60, c'' = MIDI 72, c = MIDI 48, c, = MIDI 36
+        lily_octave = octave - 3  # Adjust: MIDI octave 4 (middle C) = LilyPond c'
+        
+        if lily_octave > 0:
+            note_name += "'" * lily_octave
+        elif lily_octave < 0:
+            note_name += "," * abs(lily_octave)
+        
+        return note_name
+    
+    def duration_to_lilypond(duration: float, tempo: int) -> str:
+        """Convert duration in seconds to LilyPond duration notation."""
+        # Calculate duration in beats
+        beat_duration = 60.0 / tempo
+        beats = duration / beat_duration
+        
+        # Map to LilyPond durations (1=whole, 2=half, 4=quarter, 8=eighth, 16=sixteenth)
+        if beats >= 3.0:
+            return "1"  # Whole note
+        elif beats >= 1.5:
+            return "2"  # Half note
+        elif beats >= 0.75:
+            return "4"  # Quarter note
+        elif beats >= 0.375:
+            return "8"  # Eighth note
+        elif beats >= 0.1875:
+            return "16"  # Sixteenth note
+        else:
+            return "32"  # Thirty-second note
+    
+    def rest_duration_to_lilypond(gap_seconds: float, tempo: int) -> List[str]:
+        """Convert a gap to one or more LilyPond rest durations."""
+        beat_duration = 60.0 / tempo
+        beats = gap_seconds / beat_duration
+        
+        rests = []
+        # Break down into standard note values
+        while beats >= 0.125:  # 32nd note minimum
+            if beats >= 4.0:
+                rests.append("r1")
+                beats -= 4.0
+            elif beats >= 2.0:
+                rests.append("r2")
+                beats -= 2.0
+            elif beats >= 1.0:
+                rests.append("r4")
+                beats -= 1.0
+            elif beats >= 0.5:
+                rests.append("r8")
+                beats -= 0.5
+            elif beats >= 0.25:
+                rests.append("r16")
+                beats -= 0.25
+            else:
+                rests.append("r32")
+                beats -= 0.125
+        
+        return rests if rests else ["r16"]
+    
+    def detect_technique(idx: int, tab_notes: List[TabNote], notes: List[Note]) -> str:
+        """Detect technique between consecutive notes."""
+        if idx == 0 or idx >= len(notes):
+            return ""
+        
+        tab_note = tab_notes[idx]
+        prev_tab = tab_notes[idx - 1]
+        note = notes[idx]
+        prev_note = notes[idx - 1]
+        
+        time_gap = tab_note.start_time - (prev_tab.start_time + prev_tab.duration)
+        pitch_diff = note.midi - prev_note.midi
+        same_string = tab_note.string == prev_tab.string
+        
+        # Hammer-on: ascending pitch on same string with minimal gap
+        if same_string and pitch_diff > 0 and time_gap < 0.1:
+            return "^\\markup{H}"
+        
+        # Pull-off: descending pitch on same string with minimal gap
+        if same_string and pitch_diff < 0 and time_gap < 0.1:
+            return "^\\markup{P}"
+        
+        # Slide: larger pitch change on same string
+        if same_string and abs(pitch_diff) >= 3 and time_gap < 0.08:
+            if pitch_diff > 0:
+                return "\\glissando"  # Slide up
+            else:
+                return "\\glissando"  # Slide down
+        
+        return ""
+    
+    # Build tuning string for LilyPond (standard guitar tuning format)
+    tuning_notes = []
+    for midi in reversed(tuning):  # LilyPond: high to low (string 1 to 6)
+        tuning_notes.append(midi_to_lilypond_pitch(midi))
+    tuning_str = " ".join(tuning_notes)
+    
+    # Group notes by time for chord handling (50ms tolerance)
+    CHORD_TOLERANCE = 0.05  # 50ms
+    note_groups = []
+    current_group = []
+    
+    for i, tab_note in enumerate(tab_notes):
+        if i < len(notes):
+            if not current_group:
+                current_group = [(tab_note, notes[i], i)]
+            else:
+                # Check if this note is simultaneous with the group
+                group_time = current_group[0][0].start_time
+                if abs(tab_note.start_time - group_time) <= CHORD_TOLERANCE:
+                    current_group.append((tab_note, notes[i], i))
+                else:
+                    note_groups.append(current_group)
+                    current_group = [(tab_note, notes[i], i)]
+    
+    if current_group:
+        note_groups.append(current_group)
+    
+    # Build music content
+    music_content = []
+    prev_end_time = 0
+    
+    for group in note_groups:
+        group_time = group[0][0].start_time
+        
+        # Add rests for gaps
+        gap = group_time - prev_end_time
+        if gap > 0.1:  # Significant gap (>100ms)
+            rests = rest_duration_to_lilypond(gap, tempo)
+            music_content.extend(rests)
+        
+        # Remove duplicate strings in chord (keep lowest fret per string)
+        seen_strings = {}
+        unique_notes = []
+        for tab_note, orig_note, idx in group:
+            if tab_note.string not in seen_strings:
+                seen_strings[tab_note.string] = (tab_note, orig_note, idx)
+                unique_notes.append((tab_note, orig_note, idx))
+        
+        if len(unique_notes) == 1:
+            # Single note
+            tab_note, orig_note, idx = unique_notes[0]
+            midi_pitch = tuning[tab_note.string] + tab_note.fret
+            lily_pitch = midi_to_lilypond_pitch(midi_pitch)
+            duration = duration_to_lilypond(tab_note.duration, tempo)
+            
+            # Guitar string number (1=high e, 6=low E)
+            string_num = 6 - tab_note.string
+            
+            # Technique marking
+            technique = detect_technique(idx, tab_notes, notes)
+            
+            note_str = f"{lily_pitch}{duration}\\{string_num}"
+            if technique:
+                note_str += f" {technique}"
+            
+            music_content.append(note_str)
+        else:
+            # Chord (multiple notes)
+            chord_notes = []
+            for tab_note, orig_note, idx in sorted(unique_notes, key=lambda x: x[0].string):
+                midi_pitch = tuning[tab_note.string] + tab_note.fret
+                lily_pitch = midi_to_lilypond_pitch(midi_pitch)
+                string_num = 6 - tab_note.string
+                chord_notes.append(f"{lily_pitch}\\{string_num}")
+            
+            duration = duration_to_lilypond(unique_notes[0][0].duration, tempo)
+            chord_str = f"<{' '.join(chord_notes)}>{duration}"
+            music_content.append(chord_str)
+        
+        # Update end time
+        max_duration = max(tn[0].duration for tn in unique_notes)
+        prev_end_time = group_time + max_duration
+    
+    # Build chord symbols if available
+    chord_content = ""
+    if chords:
+        chord_symbols = []
+        prev_chord_end = 0
+        
+        for chord in chords:
+            # Add spacing rests if needed
+            gap = chord.start_time - prev_chord_end
+            if gap > 0.1:
+                rest_dur = duration_to_lilypond(gap, tempo)
+                chord_symbols.append(f"s{rest_dur}")  # spacer rest
+            
+            # LilyPond chord naming
+            root = NOTE_NAMES[chord.root].lower().replace('#', 'is').replace('b', 'es')
+            quality = chord.quality
+            
+            lily_chord = root
+            if quality == 'm' or quality == 'min':
+                lily_chord += ":m"
+            elif quality == '7':
+                lily_chord += ":7"
+            elif quality == 'maj7':
+                lily_chord += ":maj7"
+            elif quality == 'm7':
+                lily_chord += ":m7"
+            elif quality == 'dim':
+                lily_chord += ":dim"
+            elif quality == 'aug':
+                lily_chord += ":aug"
+            elif quality == 'sus4':
+                lily_chord += ":sus4"
+            elif quality == 'sus2':
+                lily_chord += ":sus2"
+            
+            duration = duration_to_lilypond(chord.duration, tempo)
+            chord_symbols.append(f"{lily_chord}{duration}")
+            prev_chord_end = chord.start_time + chord.duration
+        
+        if chord_symbols:
+            chord_content = " ".join(chord_symbols)
+    
+    # Escape title for LilyPond
+    safe_title = title.replace('"', '\\"').replace('\\', '\\\\')
+    safe_composer = composer.replace('"', '\\"').replace('\\', '\\\\')
+    
+    # Generate the complete LilyPond file
+    lily_content = f'''\\version "2.24.0"
+
+\\header {{
+  title = "{safe_title}"
+  composer = "{safe_composer}"
+  tagline = "Generated by Guitar Tab Generator"
+}}
+
+% Guitar tuning (high to low: e' b g d a, e,)
+#(define guitar-tuning '({tuning_str}))
+
+% The music
+music = \\relative {{
+  \\tempo 4 = {tempo}
+  \\time 4/4
+  {" ".join(music_content)}
+  \\bar "|."
+}}
+
+'''
+
+    # Add chord symbols section if chords exist
+    if chord_content:
+        lily_content += f'''% Chord symbols
+chordNames = \\chordmode {{
+  {chord_content}
+}}
+
+'''
+
+    # Build the score
+    if include_standard_notation:
+        lily_content += '''% Score with standard notation and tablature
+\\score {
+  <<
+'''
+        if chord_content:
+            lily_content += '''    \\new ChordNames { \\chordNames }
+'''
+        lily_content += f'''    \\new Staff {{
+      \\clef "treble_8"
+      \\key c \\major
+      \\music
+    }}
+    \\new TabStaff {{
+      \\set TabStaff.stringTunings = #guitar-tuning
+      \\music
+    }}
+  >>
+  \\layout {{
+    \\context {{
+      \\TabStaff
+      \\override TabNoteHead.font-size = #-2
+      \\override Stem.transparent = ##t
+      \\override Beam.transparent = ##t
+    }}
+  }}
+  \\midi {{ \\tempo 4 = {tempo} }}
+}}
+'''
+    else:
+        # Tab only
+        lily_content += f'''% Score with tablature only
+\\score {{
+  <<
+'''
+        if chord_content:
+            lily_content += '''    \\new ChordNames { \\chordNames }
+'''
+        lily_content += f'''    \\new TabStaff {{
+      \\set TabStaff.stringTunings = #guitar-tuning
+      \\music
+    }}
+  >>
+  \\layout {{
+    \\context {{
+      \\TabStaff
+      \\override TabNoteHead.font-size = #-2
+    }}
+  }}
+  \\midi {{ \\tempo 4 = {tempo} }}
+}}
+'''
+    
+    # Write file
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(lily_content)
+        
+        print(f"✅ Exported LilyPond file: {output_path}")
+        print(f"   To generate PDF: lilypond {output_path}")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to write LilyPond file: {e}")
+        return False
+
+
 def get_export_extension(format_name: str) -> str:
     """Get the appropriate file extension for an export format."""
     extensions = {
@@ -3106,6 +3631,8 @@ def get_export_extension(format_name: str) -> str:
         'xml': '.musicxml',
         'ascii': '.txt',
         'txt': '.txt',
+        'lilypond': '.ly',
+        'ly': '.ly',
     }
     return extensions.get(format_name.lower(), '.txt')
 
@@ -3132,6 +3659,7 @@ Export formats:
   ascii     - Plain text tablature (default)
   gp5       - Guitar Pro 5 format (.gp5)
   musicxml  - MusicXML format (.musicxml) - universal format
+  lilypond  - LilyPond format (.ly) - run 'lilypond file.ly' for beautiful PDFs
 
 Polyphonic detection (--polyphonic):
   nmf       - Non-negative Matrix Factorization on CQT (default)
@@ -3146,6 +3674,14 @@ Musical post-processing:
   --no-snap      - Disable pitch snapping to scale
   --detect-patterns - Find repeated riffs/patterns
 
+Fingering optimization (--optimize-fingering):
+  Uses dynamic programming to find optimal fret/string assignments:
+  - Minimizes hand position changes and fret jumps
+  - Prefers open strings and lower frets where appropriate
+  - Considers technique requirements (bends easier on certain strings)
+  - Handles chords with playable finger spans
+  - Look-ahead optimization for upcoming notes
+
 Examples:
   %(prog)s song.mp3
   %(prog)s song.mp3 -o tabs.txt
@@ -3156,6 +3692,12 @@ Examples:
   %(prog)s song.mp3 --polyphonic
   %(prog)s song.mp3 --polyphonic --poly-method harmonic
   %(prog)s song.mp3 --polyphonic --max-simultaneous 4  # Max 4 notes at once
+  
+  # Fingering optimization
+  %(prog)s song.mp3 --optimize-fingering                     # Enable optimization
+  %(prog)s song.mp3 --optimize-fingering --fingering-max-span 5  # Allow wider stretch
+  %(prog)s song.mp3 --optimize-fingering --fingering-open-string-bonus 2.0  # Prefer open strings more
+  %(prog)s song.mp3 -t drop_d --optimize-fingering           # Works with alternate tunings
   
   # Musical post-processing
   %(prog)s song.mp3 --key Am --quantize 16            # Snap to Am scale, quantize to 16ths
@@ -3171,9 +3713,9 @@ Examples:
     parser.add_argument('--tuning', '-t', default='standard',
                         help='Guitar tuning (see list below, default: standard)')
     parser.add_argument('--format', '-f', 
-                        choices=['ascii', 'gp5', 'gp', 'guitarpro', 'musicxml', 'xml'],
+                        choices=['ascii', 'gp5', 'gp', 'guitarpro', 'musicxml', 'xml', 'lilypond', 'ly'],
                         default='ascii',
-                        help='Output format: ascii (default), gp5/guitarpro, musicxml/xml')
+                        help='Output format: ascii (default), gp5/guitarpro, musicxml/xml, lilypond/ly')
     parser.add_argument('--title', default=None,
                         help='Song title (for GP5/MusicXML export)')
     parser.add_argument('--artist', '-a', default='Guitar Tab Generator',
@@ -3220,6 +3762,32 @@ Examples:
                         help='Detect repeated patterns/riffs in the transcription')
     parser.add_argument('--swing', type=float, default=0.0,
                         help='Swing amount for quantization (0.0=straight, 0.33=triplet, 0.5=heavy)')
+    
+    # Fingering optimization arguments
+    parser.add_argument('--optimize-fingering', action='store_true',
+                        help='Enable advanced fingering optimization (considers hand position, stretches, technique)')
+    parser.add_argument('--fingering-low-fret-bonus', type=float, default=0.5,
+                        help='Bonus for lower frets in fingering optimization (default: 0.5)')
+    parser.add_argument('--fingering-open-string-bonus', type=float, default=1.5,
+                        help='Bonus for open strings in fingering optimization (default: 1.5)')
+    parser.add_argument('--fingering-max-span', type=int, default=4,
+                        help='Maximum fret span for fingering (default: 4)')
+    
+    # String detection arguments
+    parser.add_argument('--spectral-strings', action='store_true',
+                        help='Use spectral/timbre analysis to detect which string notes are played on')
+    parser.add_argument('--string-detection-verbose', action='store_true',
+                        help='Show detailed string detection analysis')
+    
+    # Rhythm notation arguments
+    parser.add_argument('--rhythm', '-r', action='store_true',
+                        help='Enable rhythm notation (shows note durations above tab)')
+    parser.add_argument('--detect-tempo', action='store_true',
+                        help='Auto-detect tempo from audio (overrides --tempo if faster/more accurate)')
+    parser.add_argument('--show-rests', action='store_true',
+                        help='Show rest symbols in rhythm notation')
+    parser.add_argument('--unicode-rhythm', action='store_true',
+                        help='Use Unicode music symbols for rhythm (♩♪♬ instead of q e s)')
     
     # Add audio preprocessing arguments
     add_preprocessing_args(parser)
@@ -3365,11 +3933,70 @@ Examples:
         else:
             print("  No chord patterns detected")
     
-    # Convert to tabs
-    tab_notes = notes_to_tabs(notes, tuning)
+    # Convert to tabs - use spectral string detection if requested
+    use_spectral = args.spectral_strings and HAS_STRING_DETECTION
     
-    # Apply physical playability optimizations
-    if HAS_MUSIC_THEORY and tab_notes:
+    if use_spectral:
+        print("\n🎸 Using spectral string detection...")
+        if not HAS_STRING_DETECTION:
+            print("⚠️  String detection module not available, falling back to heuristics")
+            use_spectral = False
+    
+    # Convert to tabs - use optimizer if requested
+    if args.optimize_fingering:
+        if HAS_FINGERING_OPTIMIZER:
+            print("\n🎯 Optimizing fingering...")
+            
+            # Create custom config from args
+            from fingering_optimizer import FingeringConfig
+            config = FingeringConfig(
+                max_fret_span=args.fingering_max_span,
+                low_fret_bonus=args.fingering_low_fret_bonus,
+                open_string_bonus=args.fingering_open_string_bonus,
+            )
+            
+            # Get unoptimized tabs for comparison
+            if use_spectral:
+                original_tabs = notes_to_tabs_spectral(
+                    notes, audio_path=audio_path, tuning=tuning,
+                    verbose=args.string_detection_verbose
+                )
+            else:
+                original_tabs = notes_to_tabs(notes, tuning)
+            
+            # Run optimization
+            tab_notes = optimize_fingering(notes, tuning=tuning, config=config, verbose=True)
+            
+            # Show comparison metrics
+            if original_tabs and tab_notes:
+                comparison = compare_fingerings(notes, original_tabs, tab_notes, tuning)
+                print("\n📊 Fingering Comparison:")
+                print(f"   Original avg fret: {comparison['original'].get('avg_fret', 0):.1f}")
+                print(f"   Optimized avg fret: {comparison['optimized'].get('avg_fret', 0):.1f}")
+                print(f"   Original avg fret jump: {comparison['original'].get('avg_fret_jump', 0):.1f}")
+                print(f"   Optimized avg fret jump: {comparison['optimized'].get('avg_fret_jump', 0):.1f}")
+                if comparison['improvement'].get('avg_fret_jump', 0) > 0:
+                    print(f"   ✅ Reduced fret jumps by {comparison['improvement']['avg_fret_jump']:.1f} on average")
+        else:
+            print("⚠️  Fingering optimizer not available. Using default tab assignment.")
+            if use_spectral:
+                tab_notes = notes_to_tabs_spectral(
+                    notes, audio_path=audio_path, tuning=tuning,
+                    verbose=args.string_detection_verbose
+                )
+            else:
+                tab_notes = notes_to_tabs(notes, tuning)
+    else:
+        if use_spectral:
+            tab_notes = notes_to_tabs_spectral(
+                notes, audio_path=audio_path, tuning=tuning,
+                verbose=args.string_detection_verbose
+            )
+        else:
+            tab_notes = notes_to_tabs(notes, tuning)
+    
+    # Apply additional physical playability optimizations (if not using optimizer)
+    if not args.optimize_fingering and HAS_MUSIC_THEORY and tab_notes:
         # Filter physically impossible transitions
         if not args.no_playability_filter:
             tab_notes = filter_impossible_transitions(
@@ -3431,6 +4058,21 @@ Examples:
                 composer=args.artist,
                 tempo=args.tempo,
                 tuning=tuning
+            )
+            if not success:
+                sys.exit(1)
+        
+        elif format_name in ('lilypond', 'ly'):
+            success = export_lilypond(
+                tab_notes,
+                notes,
+                output_path,
+                title=title,
+                composer=args.artist,
+                tempo=args.tempo,
+                tuning=tuning,
+                chords=chords,
+                include_standard_notation=True
             )
             if not success:
                 sys.exit(1)

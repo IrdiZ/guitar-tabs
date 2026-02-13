@@ -1,5 +1,19 @@
 # Guitar Tab Transcription Research
 
+## 🏠 Existing Implementation
+
+This directory already contains a custom guitar tab generator (`guitar_tabs.py`) built with:
+- Multiple pitch detection algorithms (pyin, piptrack, polyphonic NMF)
+- Advanced onset detection (spectral flux, complex domain, HFC voting)
+- Music theory post-processing (key detection, scale filtering)
+- Physical playability optimization (fret preference, impossible transition filtering)
+- Chord detection and pattern recognition
+- Export to ASCII tabs, MusicXML, and Guitar Pro formats
+
+The research below documents **state-of-the-art ML approaches** that could supplement or enhance this existing system.
+
+---
+
 ## 🎯 Executive Summary
 
 After comprehensive research, the **best open-source approach** for guitar tablature transcription combines:
@@ -258,6 +272,34 @@ I recommend a **two-stage approach**:
 | GuitarSet | https://guitarset.weebly.com |
 | Awesome AGT List | https://github.com/lucasgris/awesome-agt |
 | amt-tools Framework | https://github.com/cwitkowitz/amt-tools |
+
+---
+
+## ⚠️ Installation Notes
+
+### Python Version Compatibility
+Basic Pitch and some dependencies have compatibility issues with Python 3.13+. 
+Use Python 3.10 or 3.11 for best results:
+
+```bash
+# Create venv with specific Python version
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Quick Test (Docker)
+If local installation is problematic, use the Demucs Docker image:
+```bash
+# https://github.com/xserrat/docker-facebook-demucs
+docker pull xserrat/facebook-demucs
+docker run -v $(pwd):/data xserrat/facebook-demucs -n htdemucs_6s /data/song.mp3
+```
+
+### Online Tools (No Install)
+- **Basic Pitch Demo**: https://basicpitch.spotify.com
+- **Demucs on HuggingFace**: https://huggingface.co/spaces/akhaliq/demucs
+- **MVSep**: https://mvsep.com (select Demucs3 model B)
 
 ---
 

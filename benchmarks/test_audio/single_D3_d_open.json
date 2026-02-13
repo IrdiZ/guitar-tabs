@@ -1,0 +1,21 @@
+{
+  "name": "single_D3_d_open",
+  "sample_rate": 22050,
+  "duration": 1.6,
+  "notes": [
+    {
+      "midi_note": 50,
+      "note_name": "D3",
+      "frequency_hz": 146.8323839587038,
+      "start_time": 0.1,
+      "end_time": 1.1,
+      "duration": 1.0,
+      "velocity": 0.8,
+      "string": null,
+      "fret": null
+    }
+  ],
+  "metadata": {
+    "type": "single_note"
+  }
+}
