@@ -1,6 +1,33 @@
-librosa>=0.10.0
-numpy>=1.24.0
-scipy>=1.10.0
-scikit-learn>=1.3.0
-soundfile>=0.12.0
-yt-dlp>=2023.0.0
+# Guitar Tab Transcription - Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core audio processing
+librosa>=0.10.0           # Audio analysis
+numpy>=1.24.0             # Numerical operations
+scipy>=1.10.0             # Signal processing
+soundfile>=0.12.0         # Audio file I/O
+scikit-learn>=1.0.0       # NMF for polyphonic detection
+
+# Audio preprocessing
+noisereduce>=3.0.0        # Spectral noise reduction
+
+# Core transcription (pick one approach)
+basic-pitch>=0.3.0        # Spotify's lightweight AMT - easiest to use
+
+# Optional: Source separation for isolating guitar from mixes
+demucs>=4.0.0             # Meta's music source separation
+
+# Optional: MIDI manipulation
+pretty_midi>=0.2.10       # For MIDI to ASCII tab conversion
+
+# Optional: YouTube downloads
+yt-dlp>=2023.0.0          # YouTube audio extraction
+
+# Optional: Advanced CRNN-based tablature (trimplexx/music-transcription)
+# These are needed if you want to use the CRNN model directly:
+# torch>=2.0.0
+# torchaudio>=2.0.0
+# librosa>=0.11.0
+# mirdata>=0.3.9
+# nnAudio>=0.3.3
+# mir_eval

@@ -1883,7 +1883,9 @@ def detect_notes_polyphonic(
     confidence_threshold: float = 0.3,
     method: str = 'nmf',  # 'nmf' or 'harmonic'
     max_simultaneous: int = 6,
-    tuning: List[int] = None
+    tuning: List[int] = None,
+    preprocess_config: Optional[PreprocessingConfig] = None,
+    save_preprocessed: Optional[str] = None
 ) -> List[Note]:
     """
     Detect multiple simultaneous notes from audio (polyphonic pitch detection).
@@ -1900,6 +1902,8 @@ def detect_notes_polyphonic(
         method: 'nmf' or 'harmonic'
         max_simultaneous: Maximum simultaneous notes (default 6 for guitar)
         tuning: Guitar tuning (MIDI notes)
+        preprocess_config: Optional preprocessing configuration
+        save_preprocessed: Optional path to save preprocessed audio
         
     Returns:
         List of detected Notes (may have multiple notes at same timestamp)
@@ -1908,6 +1912,17 @@ def detect_notes_polyphonic(
     print(f"Loading audio: {audio_path}")
     
     y, sr = librosa.load(audio_path, sr=22050, mono=True)
+    
+    # Apply audio preprocessing if configured
+    if preprocess_config and preprocess_config.enabled:
+        print("\n🔧 Applying audio preprocessing pipeline...")
+        y = preprocess_audio(y, sr, preprocess_config, verbose=True)
+        print()
+        
+        # Optionally save preprocessed audio for debugging
+        if save_preprocessed:
+            print(f"💾 Saving preprocessed audio to: {save_preprocessed}")
+            sf.write(save_preprocessed, y, sr)
     
     if method == 'nmf':
         print("Using NMF-based polyphonic detection...")
@@ -2862,6 +2877,13 @@ Polyphonic detection (--polyphonic):
   harmonic  - Harmonic/percussive separation + peak picking
               Good for noisy recordings or complex arrangements
 
+Musical post-processing:
+  --key Am       - Specify key (e.g., Am, C, F#m, "Bb major")
+  --quantize 16  - Snap timing to 1/16 notes (4, 8, 16, or 32)
+  --scale blues  - Use blues scale for pitch snapping
+  --no-snap      - Disable pitch snapping to scale
+  --detect-patterns - Find repeated riffs/patterns
+
 Examples:
   %(prog)s song.mp3
   %(prog)s song.mp3 -o tabs.txt
@@ -2872,6 +2894,12 @@ Examples:
   %(prog)s song.mp3 --polyphonic
   %(prog)s song.mp3 --polyphonic --poly-method harmonic
   %(prog)s song.mp3 --polyphonic --max-simultaneous 4  # Max 4 notes at once
+  
+  # Musical post-processing
+  %(prog)s song.mp3 --key Am --quantize 16            # Snap to Am scale, quantize to 16ths
+  %(prog)s song.mp3 --scale pentatonic_minor          # Auto-detect key, use pentatonic
+  %(prog)s song.mp3 --quantize 8 --tempo 140          # Quantize to 8ths at 140 BPM
+  %(prog)s song.mp3 --detect-patterns --chords        # Find riffs and chords
         """
     )
     parser.add_argument('audio_file', help='Path to audio file OR YouTube URL')
@@ -3075,6 +3103,20 @@ Examples:
     # Convert to tabs
     tab_notes = notes_to_tabs(notes, tuning)
     
+    # Apply physical playability optimizations
+    if HAS_MUSIC_THEORY and tab_notes:
+        # Filter physically impossible transitions
+        if not args.no_playability_filter:
+            tab_notes = filter_impossible_transitions(
+                tab_notes, notes, 
+                max_fret_jump=5,
+                min_time_for_jump=0.05,
+                tuning=tuning
+            )
+        
+        # Optimize for lower fret positions
+        tab_notes = prefer_lower_frets(tab_notes, notes, tuning=tuning)
+    
     # Format as ASCII tab (always show preview, with chords if detected)
     tab_output = format_ascii_tab(tab_notes, tuning=tuning, chords=chords)
     
@@ -3133,11 +3175,26 @@ Examples:
                 f.write(f"# Guitar Tab - {title}\n")
                 f.write(f"# Generated from: {os.path.basename(audio_path)}\n")
                 f.write(f"# Tuning: {args.tuning}\n")
-                f.write(f"# Tempo: {args.tempo} BPM\n\n")
+                f.write(f"# Tempo: {args.tempo} BPM\n")
+                
+                # Add key information
+                if detected_key:
+                    f.write(f"# Key: {detected_key.name} (confidence: {detected_key.confidence:.2f})\n")
+                if args.quantize:
+                    f.write(f"# Quantized: 1/{args.quantize} notes\n")
+                f.write("\n")
                 
                 if chords:
                     unique_chords = list(set(c.name for c in chords))
                     f.write(f"## Chords Used: {', '.join(sorted(unique_chords))}\n\n")
+                
+                # Add pattern info
+                if patterns:
+                    f.write("## Detected Patterns/Riffs\n\n")
+                    for i, pattern in enumerate(patterns[:5], 1):
+                        times = [f"{t:.2f}s" for t in pattern.occurrences[:3]]
+                        f.write(f"- Pattern {i}: {pattern.length} notes, {pattern.count}x occurrences at {', '.join(times)}{'...' if len(pattern.occurrences) > 3 else ''}\n")
+                    f.write("\n")
                 
                 if chord_diagrams:
                     f.write("## Chord Diagrams\n\n")
