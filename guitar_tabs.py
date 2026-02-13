@@ -107,6 +107,18 @@ try:
 except ImportError:
     HAS_OCTAVE_CORRECTION = False
 
+# Multi-model ensemble pitch detection (MOST ACCURATE)
+try:
+    from ensemble_pitch import (
+        EnsemblePitchDetector,
+        EnsembleConfig,
+        ConsensusNote,
+        detect_notes_ensemble,
+    )
+    HAS_ENSEMBLE = True
+except ImportError:
+    HAS_ENSEMBLE = False
+
 # Music theory module for post-processing
 try:
     from music_theory import (
@@ -147,6 +159,17 @@ try:
     HAS_DIFFICULTY_ANALYZER = True
 except ImportError:
     HAS_DIFFICULTY_ANALYZER = False
+
+# Debug spectrogram visualization module
+try:
+    from debug_spectrogram import (
+        generate_debug_spectrogram,
+        generate_zoomed_spectrograms,
+        DetectedNote as DebugNote
+    )
+    HAS_DEBUG_SPECTROGRAM = True
+except ImportError:
+    HAS_DEBUG_SPECTROGRAM = False
 
 # Basic Pitch support via Docker
 import json
@@ -1796,7 +1819,8 @@ def detect_notes_from_audio(
     tuning: List[int] = None,
     preprocess_config: Optional[PreprocessingConfig] = None,
     save_preprocessed: Optional[str] = None,
-    crepe_model: str = 'small'
+    crepe_model: str = 'small',
+    octave_correction: bool = True
 ) -> List[Note]:
     """
     Detect notes from audio file using advanced pitch detection.
@@ -1856,6 +1880,13 @@ def detect_notes_from_audio(
             # Post-process: suppress obvious harmonics
             print("Filtering harmonics...")
             notes = filter_harmonic_notes(notes)
+            
+            # Apply octave correction
+            if octave_correction and HAS_OCTAVE_CORRECTION and len(notes) > 0:
+                print("Applying octave correction...")
+                y, sr = librosa.load(audio_path, sr=22050, mono=True)
+                notes = _apply_octave_correction_to_notes(y, sr, notes, tuning)
+            
             print(f"Final note count: {len(notes)}")
             return notes
     
@@ -1906,6 +1937,11 @@ def detect_notes_from_audio(
         # Post-process: suppress obvious harmonics
         print("Filtering harmonics...")
         notes = filter_harmonic_notes(notes)
+        
+        # Apply octave correction
+        if octave_correction and HAS_OCTAVE_CORRECTION and len(notes) > 0:
+            print("Applying octave correction...")
+            notes = _apply_octave_correction_to_notes(y, sr, notes, tuning)
         
         print(f"Detected {len(notes)} notes")
         return notes
@@ -2074,8 +2110,70 @@ def detect_notes_from_audio(
     print("Filtering harmonics...")
     notes = filter_harmonic_notes(notes)
     
+    # Apply octave correction using harmonic analysis
+    if octave_correction and HAS_OCTAVE_CORRECTION and len(notes) > 0:
+        print("Applying octave correction...")
+        notes = _apply_octave_correction_to_notes(y, sr, notes, tuning)
+    
     print(f"Detected {len(notes)} notes")
     return notes
+
+
+def _apply_octave_correction_to_notes(
+    y: np.ndarray,
+    sr: int,
+    notes: List[Note],
+    tuning: List[int] = None
+) -> List[Note]:
+    """
+    Apply octave correction to detected notes using harmonic analysis.
+    
+    This corrects common octave errors where pitch detectors lock onto
+    the wrong octave (e.g., detecting E2 instead of E3).
+    """
+    if not HAS_OCTAVE_CORRECTION:
+        return notes
+    
+    # Determine tuning name for octave correction constraints
+    tuning_name = 'standard'
+    if tuning:
+        # Find matching tuning
+        for name, midi_notes in TUNINGS.items():
+            if midi_notes == tuning:
+                tuning_name = name
+                break
+    
+    corrector = OctaveCorrector(sr=sr, tuning=tuning_name)
+    
+    # Convert Note objects to dict format
+    note_dicts = []
+    for note in notes:
+        note_dicts.append({
+            'midi': note.midi,
+            'time': note.start_time,
+            'duration': note.duration,
+            'confidence': note.confidence
+        })
+    
+    # Apply correction
+    corrected_dicts, results = corrector.correct_notes(y, note_dicts, verbose=False)
+    
+    # Count corrections for logging
+    corrections = [r for r in results if r.correction != OctaveCorrection.NONE]
+    if corrections:
+        print(f"  Corrected {len(corrections)} octave errors")
+    
+    # Convert back to Note objects
+    corrected_notes = []
+    for d in corrected_dicts:
+        corrected_notes.append(Note(
+            midi=d['midi'],
+            start_time=d['time'],
+            duration=d['duration'],
+            confidence=d['confidence']
+        ))
+    
+    return corrected_notes
 
 
 def filter_harmonic_notes(notes: List[Note], time_threshold: float = 0.05) -> List[Note]:
@@ -3970,12 +4068,16 @@ Examples:
                         help='Artist name (for GP5/MusicXML export)')
     parser.add_argument('--tempo', type=int, default=120,
                         help='Tempo in BPM (default: 120)')
-    parser.add_argument('--pitch-method', '-p', choices=['pyin', 'piptrack', 'cqt', 'crepe', 'basicpitch'], default='pyin',
-                        help='Pitch detection: pyin (fast), piptrack, cqt, crepe (deep learning), basicpitch (polyphonic, best for chords). Default: pyin')
+    parser.add_argument('--pitch-method', '-p', choices=['ensemble', 'voting', 'pyin', 'piptrack', 'cqt', 'crepe', 'basicpitch'], default='ensemble',
+                        help='Pitch detection: ensemble (BEST - 5 detector consensus), voting (legacy consensus), pyin (fast), piptrack, cqt, crepe (deep learning), basicpitch (polyphonic). Default: ensemble')
     parser.add_argument('--crepe-model', choices=['tiny', 'small', 'medium', 'large', 'full'], default='small',
                         help='CREPE model capacity: tiny/small (fast), medium, large/full (accurate). Default: small')
+    parser.add_argument('--min-votes', type=int, default=2,
+                        help='Minimum detector votes for consensus (voting method). Default: 2')
     parser.add_argument('--no-harmonic-separation', action='store_true',
                         help='Disable harmonic/percussive separation')
+    parser.add_argument('--no-octave-correction', action='store_true',
+                        help='Disable octave correction using harmonic analysis')
     parser.add_argument('--median-filter', '-m', type=int, default=5,
                         help='Median filter size for pitch smoothing (0=disabled, default: 5)')
     parser.add_argument('--min-duration', type=float, default=0.05,
@@ -4047,6 +4149,14 @@ Examples:
     parser.add_argument('--difficulty-json', type=str, default=None, metavar='PATH',
                         help='Export difficulty analysis as JSON (e.g., difficulty.json)')
     
+    # Debug spectrogram visualization
+    parser.add_argument('--debug-spectrogram', type=str, default=None, metavar='PATH',
+                        help='Generate debug spectrogram PNG with pitch overlays (e.g., debug.png)')
+    parser.add_argument('--debug-spectrogram-sections', type=int, default=0,
+                        help='Generate N zoomed section spectrograms (0 = single full view)')
+    parser.add_argument('--debug-time-range', nargs=2, type=float, metavar=('START', 'END'),
+                        help='Time range for spectrogram (start end) in seconds')
+    
     # Add audio preprocessing arguments
     add_preprocessing_args(parser)
     
@@ -4111,7 +4221,8 @@ Examples:
             tuning=tuning,
             preprocess_config=preprocess_config,
             save_preprocessed=getattr(args, 'save_preprocessed', None),
-            crepe_model=getattr(args, 'crepe_model', 'small')
+            crepe_model=getattr(args, 'crepe_model', 'small'),
+            octave_correction=not getattr(args, 'no_octave_correction', False)
         )
     
     if not notes:
@@ -4124,6 +4235,55 @@ Examples:
         print(f"  {note.name:4} at {note.start_time:.2f}s (confidence: {note.confidence:.2f})")
     if len(notes) > 20:
         print(f"  ... and {len(notes) - 20} more")
+    
+    # =========================================================================
+    # DEBUG SPECTROGRAM VISUALIZATION
+    # =========================================================================
+    if args.debug_spectrogram:
+        if HAS_DEBUG_SPECTROGRAM:
+            print("\n🔍 Generating Debug Spectrogram...")
+            print("-" * 40)
+            
+            # Convert notes to DebugNote format
+            debug_notes = [
+                DebugNote(
+                    midi_note=n.midi,
+                    start_time=n.start_time,
+                    end_time=n.start_time + n.duration,
+                    confidence=n.confidence,
+                    name=n.name
+                )
+                for n in notes
+            ]
+            
+            # Time range (optional)
+            time_range = None
+            if args.debug_time_range:
+                time_range = tuple(args.debug_time_range)
+            
+            # Generate spectrogram(s)
+            if args.debug_spectrogram_sections > 0:
+                # Generate multiple zoomed sections
+                output_dir = os.path.splitext(args.debug_spectrogram)[0] + "_sections"
+                paths = generate_zoomed_spectrograms(
+                    audio_path,
+                    debug_notes,
+                    output_dir=output_dir,
+                    num_sections=args.debug_spectrogram_sections,
+                    section_duration=5.0
+                )
+                print(f"\n📊 Generated {len(paths)} section spectrograms in: {output_dir}/")
+            else:
+                # Single spectrogram
+                generate_debug_spectrogram(
+                    audio_path,
+                    debug_notes,
+                    output_path=args.debug_spectrogram,
+                    time_range=time_range,
+                    title=title
+                )
+        else:
+            print("⚠️  Debug spectrogram module not available (debug_spectrogram.py missing)")
     
     # =========================================================================
     # MUSICAL POST-PROCESSING
