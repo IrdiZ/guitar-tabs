@@ -4107,6 +4107,45 @@ Examples:
     print("-" * 40)
     print(tab_output)
     
+    # Difficulty analysis
+    difficulty_report = None
+    if args.analyze_difficulty or args.difficulty_json:
+        if HAS_DIFFICULTY_ANALYZER:
+            # Try to get annotated notes with techniques for better analysis
+            annotated_notes = None
+            try:
+                from technique_detector import TechniqueDetector
+                y_tech, sr_tech = librosa.load(audio_path, sr=22050)
+                detector = TechniqueDetector(sr=sr_tech)
+                annotated_notes = detector.analyze(
+                    y=y_tech,
+                    notes=notes,
+                    tuning=tuning,
+                    verbose=False
+                )
+            except Exception:
+                pass  # Continue without technique annotations
+            
+            difficulty_report = analyze_difficulty(
+                tab_notes=tab_notes,
+                notes=notes,
+                annotated_notes=annotated_notes,
+                tempo=args.tempo,
+                verbose=True
+            )
+            
+            if args.analyze_difficulty:
+                print(difficulty_report.format_report())
+            
+            if args.difficulty_json:
+                import json
+                with open(args.difficulty_json, 'w') as f:
+                    json.dump(difficulty_report.to_dict(), f, indent=2)
+                print(f"\n✅ Difficulty analysis saved to {args.difficulty_json}")
+        else:
+            print("\n⚠️  Difficulty analyzer module not available.")
+            print("   Make sure difficulty_analyzer.py is in the same directory.")
+    
     # Save to file if requested
     if args.output:
         format_name = args.format.lower()
