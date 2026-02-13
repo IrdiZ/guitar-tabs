@@ -223,6 +223,20 @@ try:
 except ImportError:
     HAS_LEAD_ISOLATION = False
 
+# Genre-specific optimization (metal/rock priors)
+try:
+    from genre_optimizer import (
+        GenreOptimizer,
+        GenreProfile,
+        get_genre_profile,
+        apply_genre_optimization,
+        add_genre_args,
+        get_genre_choices,
+    )
+    HAS_GENRE_OPTIMIZER = True
+except ImportError:
+    HAS_GENRE_OPTIMIZER = False
+
 # Basic Pitch support via Docker
 import json
 import shutil
@@ -2061,6 +2075,7 @@ def detect_notes_from_audio(
         crepe_model: CREPE model capacity ('tiny', 'small', 'medium', 'large', 'full')
         distortion_mode: Enable distortion-aware pitch detection (HPS-based)
         distortion_harmonics: Number of harmonics for HPS in distortion mode
+        distortion_preprocess_config: Optional distortion-specific preprocessing config
     """
     # Distortion-aware pitch detection using Harmonic Product Spectrum
     # Best for heavily distorted electric guitar
@@ -2081,6 +2096,11 @@ def detect_notes_from_audio(
         if preprocess_config and preprocess_config.enabled:
             print("\n🔧 Applying audio preprocessing...")
             y = preprocess_audio(y, sr, preprocess_config, verbose=True)
+        
+        # Apply distortion-specific preprocessing if configured
+        if distortion_preprocess_config and distortion_preprocess_config.enabled:
+            print("\n⚡ Applying distortion preprocessing...")
+            y = preprocess_distortion(y, sr, distortion_preprocess_config, verbose=True)
         
         # Configure distortion detector
         dist_config = DistortionConfig(
@@ -2265,6 +2285,17 @@ def detect_notes_from_audio(
         # Optionally save preprocessed audio for debugging
         if save_preprocessed:
             print(f"💾 Saving preprocessed audio to: {save_preprocessed}")
+            sf.write(save_preprocessed, y, sr)
+    
+    # Apply distortion-specific preprocessing if configured
+    if distortion_preprocess_config and distortion_preprocess_config.enabled:
+        print("\n⚡ Applying distortion preprocessing pipeline...")
+        y = preprocess_distortion(y, sr, distortion_preprocess_config, verbose=True)
+        print()
+        
+        # Save preprocessed audio for debugging if requested
+        if save_preprocessed and not (preprocess_config and preprocess_config.enabled):
+            print(f"💾 Saving distortion-preprocessed audio to: {save_preprocessed}")
             sf.write(save_preprocessed, y, sr)
     
     # Optional: Extract harmonic component for cleaner pitch detection
@@ -2903,7 +2934,8 @@ def detect_notes_polyphonic(
     tuning: List[int] = None,
     preprocess_config: Optional[PreprocessingConfig] = None,
     save_preprocessed: Optional[str] = None,
-    lead_isolation_config: Optional['LeadIsolationConfig'] = None
+    lead_isolation_config: Optional['LeadIsolationConfig'] = None,
+    distortion_preprocess_config: Optional['DistortionPreprocessingConfig'] = None
 ) -> List[Note]:
     """
     Detect multiple simultaneous notes from audio (polyphonic pitch detection).
@@ -2922,6 +2954,7 @@ def detect_notes_polyphonic(
         tuning: Guitar tuning (MIDI notes)
         preprocess_config: Optional preprocessing configuration
         save_preprocessed: Optional path to save preprocessed audio
+        distortion_preprocess_config: Optional distortion-specific preprocessing config
         
     Returns:
         List of detected Notes (may have multiple notes at same timestamp)
@@ -2952,6 +2985,17 @@ def detect_notes_polyphonic(
         # Optionally save preprocessed audio for debugging
         if save_preprocessed:
             print(f"💾 Saving preprocessed audio to: {save_preprocessed}")
+            sf.write(save_preprocessed, y, sr)
+    
+    # Apply distortion-specific preprocessing if configured
+    if distortion_preprocess_config and distortion_preprocess_config.enabled:
+        print("\n⚡ Applying distortion preprocessing pipeline...")
+        y = preprocess_distortion(y, sr, distortion_preprocess_config, verbose=True)
+        print()
+        
+        # Save preprocessed audio for debugging if requested
+        if save_preprocessed and not (preprocess_config and preprocess_config.enabled):
+            print(f"💾 Saving distortion-preprocessed audio to: {save_preprocessed}")
             sf.write(save_preprocessed, y, sr)
     
     if method == 'nmf':
