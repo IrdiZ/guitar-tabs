@@ -142,7 +142,7 @@ try:
     )
     HAS_DISTORTION_PITCH = True
 except ImportError:
-    HAS_ENSEMBLE = False
+    HAS_DISTORTION_PITCH = False
 
 # Precise note segmentation (IMPROVED NOTE BOUNDARIES)
 try:

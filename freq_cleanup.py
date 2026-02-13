@@ -617,9 +617,9 @@ def add_freq_cleanup_args(parser):
     
     cleanup.add_argument(
         '--cleanup-preset',
-        choices=['default', 'aggressive', 'gentle'],
+        choices=['default', 'aggressive', 'gentle', 'pitch', 'noisy'],
         default='default',
-        help='Cleanup preset (default: default)'
+        help='Cleanup preset: default, aggressive, gentle, pitch (optimized for pitch detection), noisy (for noisy recordings)'
     )
     
     cleanup.add_argument(
@@ -674,6 +674,10 @@ def config_from_args(args) -> FreqCleanupConfig:
         config = FreqCleanupConfig.aggressive()
     elif preset == 'gentle':
         config = FreqCleanupConfig.gentle()
+    elif preset == 'pitch':
+        config = FreqCleanupConfig.pitch_optimized()
+    elif preset == 'noisy':
+        config = FreqCleanupConfig.noisy_recording()
     else:
         config = FreqCleanupConfig.default()
     

@@ -26,6 +26,76 @@ except ImportError:
 
 
 @dataclass
+class DistortionPreprocessingConfig:
+    """Configuration for distortion-specific preprocessing pipeline.
+    
+    Distorted guitar has unique challenges:
+    - Compressed dynamics (already squashed by distortion)
+    - Heavy saturation adding harmonics
+    - Intermodulation artifacts from multiple notes
+    - Harsh high-frequency content
+    """
+    # Master enable
+    enabled: bool = True
+    
+    # Heavy compression to further even dynamics
+    compress: bool = True
+    compress_threshold_db: float = -15.0  # Lower threshold for distortion
+    compress_ratio: float = 6.0  # Higher ratio
+    compress_attack_ms: float = 5.0  # Faster attack
+    compress_release_ms: float = 80.0
+    
+    # De-distortion (inverse saturation curve)
+    de_distort: bool = True
+    de_distort_strength: float = 0.5  # 0.0-1.0, how aggressively to apply inverse curve
+    de_distort_threshold: float = 0.3  # Signal level above which to apply
+    
+    # Low-pass filter for harsh harmonics
+    lowpass: bool = True
+    lowpass_freq: float = 4000.0  # Aggressive cutoff for distortion
+    lowpass_order: int = 4
+    
+    # Fundamental enhancement
+    fundamental_enhance: bool = True
+    fundamental_freq_range: Tuple[float, float] = (70.0, 800.0)  # Focus on guitar fundamentals
+    fundamental_strength: float = 0.4
+    
+    # Intermodulation artifact removal
+    remove_intermod: bool = True
+    intermod_threshold: float = 0.15  # Spectral flatness threshold
+    intermod_freq_bands: int = 24  # Number of frequency bands for analysis
+    
+    # High-pass (remove very low rumble)
+    highpass: bool = True
+    highpass_freq: float = 60.0
+    highpass_order: int = 4
+    
+    # Final normalization
+    normalize: bool = True
+    target_db: float = -3.0
+    
+    @classmethod
+    def from_args(cls, args) -> 'DistortionPreprocessingConfig':
+        """Create config from argparse namespace."""
+        config = cls()
+        
+        config.enabled = getattr(args, 'preprocess_distortion', False)
+        
+        if not config.enabled:
+            return config
+        
+        # Parameter overrides if provided
+        if hasattr(args, 'distort_lowpass') and args.distort_lowpass is not None:
+            config.lowpass_freq = args.distort_lowpass
+        if hasattr(args, 'de_distort_strength') and args.de_distort_strength is not None:
+            config.de_distort_strength = args.de_distort_strength
+        if hasattr(args, 'fundamental_strength') and args.fundamental_strength is not None:
+            config.fundamental_strength = args.fundamental_strength
+            
+        return config
+
+
+@dataclass
 class PreprocessingConfig:
     """Configuration for audio preprocessing pipeline."""
     # Master enable

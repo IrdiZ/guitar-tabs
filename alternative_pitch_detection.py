@@ -183,14 +183,20 @@ class EssentiaPitchDetector:
             audio = audio.astype(np.float32)
         
         # PitchMelodia operates on the whole signal
+        # Parameters: binResolution, filterIterations, frameSize, guessUnvoiced,
+        # harmonicWeight, hopSize, magnitudeCompression, magnitudeThreshold,
+        # maxFrequency, minDuration, minFrequency, numberHarmonics, etc.
         melodia = es.PitchMelodia(
             frameSize=self.frame_size,
             hopSize=self.hop_size,
             sampleRate=self.sr,
             minFrequency=GUITAR_MIN_HZ,
             maxFrequency=GUITAR_MAX_HZ,
-            voicingTolerance=0.2,
-            filterIterations=3
+            filterIterations=3,
+            guessUnvoiced=True,  # Try to estimate pitch in unvoiced regions
+            harmonicWeight=0.8,  # Weight for harmonic summation
+            magnitudeThreshold=40,  # Minimum magnitude
+            numberHarmonics=20,  # Number of harmonics to consider
         )
         
         pitch_values, confidence_values = melodia(audio)
@@ -249,10 +255,11 @@ class EssentiaPitchDetector:
             audio = audio.astype(np.float32)
         
         # Frame-by-frame probabilistic pitch
+        # Parameters: frameSize, lowAmp, preciseTime, sampleRate
         yin_probs = es.PitchYinProbabilities(
             frameSize=self.frame_size,
             sampleRate=self.sr,
-            lowRMSThreshold=0.01
+            lowAmp=0.01  # Minimum amplitude threshold
         )
         
         # HMM smoothing
