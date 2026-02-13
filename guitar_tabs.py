@@ -23,6 +23,15 @@ import sys
 import os
 import subprocess
 import tempfile
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
+
+# Guitar Pro support
+try:
+    import guitarpro
+    HAS_GUITARPRO = True
+except ImportError:
+    HAS_GUITARPRO = False
 
 # Guitar tunings (MIDI note numbers, low to high)
 TUNINGS = {
@@ -940,7 +949,7 @@ def export_guitar_pro(
         True if successful, False otherwise
     """
     if tuning is None:
-        tuning = STANDARD_TUNING
+        tuning = TUNINGS['standard']
     
     if not HAS_GUITARPRO:
         print("❌ pyguitarpro not installed. Install with: pip install pyguitarpro")
@@ -954,7 +963,7 @@ def export_guitar_pro(
     song = guitarpro.Song()
     song.title = title
     song.artist = artist
-    song.tempo = guitarpro.models.MixTableItem(value=tempo)
+    song.tempo = tempo  # Simple integer for BPM
     
     # Create track
     track = guitarpro.Track(song=song)
@@ -980,7 +989,6 @@ def export_guitar_pro(
         header = guitarpro.MeasureHeader()
         header.number = i + 1
         header.start = int(i * 960 * 4)  # 960 ticks per quarter note
-        header.tempo = guitarpro.models.MixTableItem(value=tempo) if i == 0 else None
         header.timeSignature = guitarpro.TimeSignature()
         header.timeSignature.numerator = 4
         header.timeSignature.denominator = guitarpro.Duration()
@@ -1091,7 +1099,7 @@ def export_musicxml(
         True if successful, False otherwise
     """
     if tuning is None:
-        tuning = STANDARD_TUNING
+        tuning = TUNINGS['standard']
     
     if not tab_notes:
         print("❌ No notes to export")
