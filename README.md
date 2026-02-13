@@ -52,6 +52,38 @@ This can improve fret assignment accuracy by 20-40% compared to heuristic method
 
 ---
 
+## Accuracy Testing
+
+Ground truth testing validates detection accuracy using synthetic audio with known notes.
+
+```bash
+# Run all accuracy tests
+python ground_truth_test.py
+
+# Generate test audio only
+python ground_truth_test.py --generate-only
+
+# Tune parameters for optimal detection
+python ground_truth_test.py --tune
+```
+
+**Current Performance (v1.0):**
+| Metric | Value |
+|--------|-------|
+| Overall F1 Score | 57.7% |
+| Monophonic Detection | ~70% F1 |
+| Pitch Accuracy | 80%+ |
+| Chord Detection | ~25% F1 (limited) |
+
+**Optimal Settings:**
+- `hop_length=256` (fast passages)
+- `min_confidence=0.2`
+- `pitch_method=cqt`
+
+See `test_ground_truth/RESULTS.md` for detailed analysis.
+
+---
+
 ## ML-Enhanced Approaches
 
 ## Quick Start

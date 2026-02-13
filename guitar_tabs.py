@@ -1657,6 +1657,7 @@ def detect_notes_with_voting(
     use_harmonic_separation: bool = True,
     tuning: List[int] = None,
     preprocess_config: Optional[PreprocessingConfig] = None,
+    freq_cleanup_config: Optional['FreqCleanupConfig'] = None,
     save_preprocessed: Optional[str] = None,
     min_votes: int = 2,
     verbose: bool = True
@@ -1692,6 +1693,12 @@ def detect_notes_with_voting(
     
     print(f"🎯 Loading audio: {audio_path}")
     y, sr = librosa.load(audio_path, sr=22050, mono=True)
+    
+    # Apply frequency domain cleanup if configured (before pitch detection)
+    if HAS_FREQ_CLEANUP and freq_cleanup_config and freq_cleanup_config.enabled:
+        print("\n🎸 Applying frequency domain cleanup...")
+        y = freq_domain_cleanup(y, sr, freq_cleanup_config, verbose=True)
+        print()
     
     # Apply audio preprocessing if configured
     if preprocess_config and preprocess_config.enabled:
@@ -1842,6 +1849,7 @@ def detect_notes_from_audio(
     median_filter_size: int = 5,
     tuning: List[int] = None,
     preprocess_config: Optional[PreprocessingConfig] = None,
+    freq_cleanup_config: Optional['FreqCleanupConfig'] = None,
     save_preprocessed: Optional[str] = None,
     crepe_model: str = 'small',
     octave_correction: bool = True
@@ -1904,6 +1912,40 @@ def detect_notes_from_audio(
             print(f"Ensemble detected {len(notes)} notes")
             return notes
     
+    # Precise note segmentation (BEST FOR NOTE BOUNDARIES)
+    if pitch_method == 'segment':
+        if not HAS_NOTE_SEGMENTATION:
+            print("⚠️  note_segmentation module not available, falling back to voting")
+            pitch_method = 'voting'
+        else:
+            print("🎯 Using precise note segmentation...")
+            segments = segment_notes(
+                audio_path,
+                sr=22050,
+                hop_length=256,  # Smaller hop for precision
+                onset_threshold=0.3,
+                min_confidence=confidence_threshold * 0.6,  # Lower for better detection
+                min_note_duration_ms=min_note_duration * 1000,
+                use_harmonic_separation=use_harmonic_separation,
+                verbose=True
+            )
+            
+            # Convert to Note objects
+            notes = convert_to_notes(segments)
+            
+            # Post-process: suppress obvious harmonics
+            print("Filtering harmonics...")
+            notes = filter_harmonic_notes(notes)
+            
+            # Apply octave correction
+            if octave_correction and HAS_OCTAVE_CORRECTION and len(notes) > 0:
+                print("Applying octave correction...")
+                y, sr = librosa.load(audio_path, sr=22050, mono=True)
+                notes = _apply_octave_correction_to_notes(y, sr, notes, tuning)
+            
+            print(f"Final note count: {len(notes)}")
+            return notes
+    
     # Multi-detector voting - legacy method
     if pitch_method == 'voting':
         if not HAS_PITCH_ACCURACY:
@@ -1918,6 +1960,7 @@ def detect_notes_from_audio(
                 use_harmonic_separation=use_harmonic_separation,
                 tuning=tuning,
                 preprocess_config=preprocess_config,
+                freq_cleanup_config=freq_cleanup_config,
                 save_preprocessed=save_preprocessed
             )
     
@@ -4133,8 +4176,8 @@ Examples:
                         help='Artist name (for GP5/MusicXML export)')
     parser.add_argument('--tempo', type=int, default=120,
                         help='Tempo in BPM (default: 120)')
-    parser.add_argument('--pitch-method', '-p', choices=['ensemble', 'voting', 'pyin', 'piptrack', 'cqt', 'crepe', 'basicpitch'], default='ensemble',
-                        help='Pitch detection: ensemble (BEST - 5 detector consensus), voting (legacy consensus), pyin (fast), piptrack, cqt, crepe (deep learning), basicpitch (polyphonic). Default: ensemble')
+    parser.add_argument('--pitch-method', '-p', choices=['segment', 'ensemble', 'voting', 'pyin', 'piptrack', 'cqt', 'crepe', 'basicpitch'], default='segment',
+                        help='Pitch detection: segment (BEST - precise note boundaries), ensemble (5 detector consensus), voting (legacy consensus), pyin (fast), piptrack, cqt, crepe (deep learning), basicpitch (polyphonic). Default: segment')
     parser.add_argument('--crepe-model', choices=['tiny', 'small', 'medium', 'large', 'full'], default='small',
                         help='CREPE model capacity: tiny/small (fast), medium, large/full (accurate). Default: small')
     parser.add_argument('--min-votes', type=int, default=2,
@@ -4252,6 +4295,11 @@ Examples:
     # Create preprocessing config
     preprocess_config = PreprocessingConfig.from_args(args)
     
+    # Create frequency cleanup config
+    freq_cleanup_config = None
+    if HAS_FREQ_CLEANUP:
+        freq_cleanup_config = freq_config_from_args(args)
+    
     print("🎸 Guitar Tab Generator (Enhanced)")
     print("=" * 40)
     print(f"Tuning: {args.tuning} {tuning}")
@@ -4266,6 +4314,8 @@ Examples:
         print(f"Median filter: {args.median_filter if args.median_filter > 0 else 'disabled'}")
     if preprocess_config.enabled:
         print(f"Preprocessing: ENABLED")
+    if freq_cleanup_config and freq_cleanup_config.enabled:
+        print(f"Frequency Cleanup: ENABLED")
     print()
     
     # Detect notes - use polyphonic or monophonic detection
@@ -4290,6 +4340,7 @@ Examples:
             min_note_duration=args.min_duration,
             tuning=tuning,
             preprocess_config=preprocess_config,
+            freq_cleanup_config=freq_cleanup_config,
             save_preprocessed=getattr(args, 'save_preprocessed', None),
             crepe_model=getattr(args, 'crepe_model', 'small'),
             octave_correction=not getattr(args, 'no_octave_correction', False)

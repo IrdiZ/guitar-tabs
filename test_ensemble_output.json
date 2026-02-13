@@ -1,0 +1,937 @@
+{
+  "notes": [
+    {
+      "midi": 55,
+      "name": "G3",
+      "start_time": 0.13931972789115646,
+      "end_time": 0.2902494331065759,
+      "duration": 0.15092970521541946,
+      "confidence": 0.8536405004452714,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 195.68205679187105,
+      "pitch_spread_cents": 25.07692821193758
+    },
+    {
+      "midi": 43,
+      "name": "G2",
+      "start_time": 0.2089795918367347,
+      "end_time": 0.3947392290249433,
+      "duration": 0.1857596371882086,
+      "confidence": 0.9289937199126446,
+      "votes": 4,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "pyin",
+        "basic_pitch"
+      ],
+      "frequency": 98.16268314454695,
+      "pitch_spread_cents": 36.644620712243515
+    },
+    {
+      "midi": 55,
+      "name": "G3",
+      "start_time": 0.4179591836734694,
+      "end_time": 0.5688888888888889,
+      "duration": 0.15092970521541949,
+      "confidence": 0.8176175720080906,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 195.78832604975656,
+      "pitch_spread_cents": 30.77020997686981
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 0.7546485260770975,
+      "end_time": 1.18421768707483,
+      "duration": 0.42956916099773246,
+      "confidence": 0.997213082019624,
+      "votes": 4,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "pyin",
+        "basic_pitch"
+      ],
+      "frequency": 109.98657125236747,
+      "pitch_spread_cents": 41.89221533420779
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 1.3119274376417234,
+      "end_time": 1.497687074829932,
+      "duration": 0.18575963718820865,
+      "confidence": 0.6236092491590625,
+      "votes": 4,
+      "methods": [
+        "pyin",
+        "cqt",
+        "basic_pitch",
+        "piptrack"
+      ],
+      "frequency": 110.07575454593311,
+      "pitch_spread_cents": 42.375943206009694
+    },
+    {
+      "midi": 57,
+      "name": "A3",
+      "start_time": 1.497687074829932,
+      "end_time": 1.5673469387755103,
+      "duration": 0.06965986394557833,
+      "confidence": 0.8422664425075176,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 220.53558050266741,
+      "pitch_spread_cents": 35.217739025214804
+    },
+    {
+      "midi": 55,
+      "name": "G3",
+      "start_time": 1.6718367346938776,
+      "end_time": 1.811156462585034,
+      "duration": 0.13931972789115643,
+      "confidence": 0.900450622468156,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 196.01111304593587,
+      "pitch_spread_cents": 38.31417222665324
+    },
+    {
+      "midi": 52,
+      "name": "E3",
+      "start_time": 1.811156462585034,
+      "end_time": 1.9969160997732427,
+      "duration": 0.18575963718820865,
+      "confidence": 0.8161215557932876,
+      "votes": 4,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "pyin",
+        "basic_pitch"
+      ],
+      "frequency": 164.97237287789835,
+      "pitch_spread_cents": 67.00446969477201
+    },
+    {
+      "midi": 50,
+      "name": "D3",
+      "start_time": 2.020136054421769,
+      "end_time": 2.1362358276643993,
+      "duration": 0.11609977324263054,
+      "confidence": 0.8213706639988405,
+      "votes": 4,
+      "methods": [
+        "pyin",
+        "cqt",
+        "basic_pitch",
+        "piptrack"
+      ],
+      "frequency": 147.1831677898788,
+      "pitch_spread_cents": 31.935291464967683
+    },
+    {
+      "midi": 60,
+      "name": "C4",
+      "start_time": 2.1491297052154192,
+      "end_time": 2.2523356009070294,
+      "duration": 0.1032058956916102,
+      "confidence": 0.9426902160439198,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 262.2663266160797,
+      "pitch_spread_cents": 23.29016342389824
+    },
+    {
+      "midi": 57,
+      "name": "A3",
+      "start_time": 2.345215419501134,
+      "end_time": 2.414875283446712,
+      "duration": 0.06965986394557833,
+      "confidence": 0.9257237139424589,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 219.80473815070837,
+      "pitch_spread_cents": 28.01407213713441
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 2.3813292517006803,
+      "end_time": 2.497429024943311,
+      "duration": 0.11609977324263054,
+      "confidence": 0.6052822728705906,
+      "votes": 4,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "pyin",
+        "basic_pitch"
+      ],
+      "frequency": 110.16552648571204,
+      "pitch_spread_cents": 25.370232753106787
+    },
+    {
+      "midi": 51,
+      "name": "D#3",
+      "start_time": 2.693514739229025,
+      "end_time": 2.809614512471655,
+      "duration": 0.1160997732426301,
+      "confidence": 0.9345640156371953,
+      "votes": 4,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "pyin",
+        "basic_pitch"
+      ],
+      "frequency": 154.95451455689135,
+      "pitch_spread_cents": 43.531646899839096
+    },
+    {
+      "midi": 50,
+      "name": "D3",
+      "start_time": 2.809614512471655,
+      "end_time": 2.9502181405895693,
+      "duration": 0.14060362811791416,
+      "confidence": 0.977193098097988,
+      "votes": 4,
+      "methods": [
+        "pyin",
+        "cqt",
+        "basic_pitch",
+        "piptrack"
+      ],
+      "frequency": 148.13233439290718,
+      "pitch_spread_cents": 46.950772365465895
+    },
+    {
+      "midi": 48,
+      "name": "C3",
+      "start_time": 2.972154195011338,
+      "end_time": 3.0418140589569163,
+      "duration": 0.06965986394557833,
+      "confidence": 0.8888358764327685,
+      "votes": 4,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "pyin",
+        "basic_pitch"
+      ],
+      "frequency": 130.9028491940639,
+      "pitch_spread_cents": 16.95077236546537
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 3.7848526077097504,
+      "end_time": 4.249251700680272,
+      "duration": 0.46439909297052173,
+      "confidence": 0.8363241147830544,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.37016971334648,
+      "pitch_spread_cents": 31.779005853663936
+    },
+    {
+      "midi": 52,
+      "name": "E3",
+      "start_time": 4.690430839002268,
+      "end_time": 4.8297505668934235,
+      "duration": 0.13931972789115576,
+      "confidence": 0.7294294625666549,
+      "votes": 4,
+      "methods": [
+        "pyin",
+        "cqt",
+        "basic_pitch",
+        "piptrack"
+      ],
+      "frequency": 164.8797766893453,
+      "pitch_spread_cents": 48.030117529997746
+    },
+    {
+      "midi": 50,
+      "name": "D3",
+      "start_time": 4.806530612244898,
+      "end_time": 4.971638095238095,
+      "duration": 0.16510748299319733,
+      "confidence": 0.9516704830951839,
+      "votes": 4,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "pyin",
+        "basic_pitch"
+      ],
+      "frequency": 146.92750798368218,
+      "pitch_spread_cents": 41.28008909814729
+    },
+    {
+      "midi": 48,
+      "name": "C3",
+      "start_time": 5.076127891156463,
+      "end_time": 5.154829931972789,
+      "duration": 0.07870204081632615,
+      "confidence": 0.7675494632546096,
+      "votes": 4,
+      "methods": [
+        "pyin",
+        "cqt",
+        "basic_pitch",
+        "piptrack"
+      ],
+      "frequency": 131.31422051296573,
+      "pitch_spread_cents": 27.146199610247315
+    },
+    {
+      "midi": 57,
+      "name": "A3",
+      "start_time": 5.154829931972789,
+      "end_time": 5.250277551020408,
+      "duration": 0.09544761904761856,
+      "confidence": 0.833086958992603,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 220.02791258997127,
+      "pitch_spread_cents": 36.904090844843836
+    },
+    {
+      "midi": 50,
+      "name": "D3",
+      "start_time": 5.598576870748299,
+      "end_time": 5.737896598639455,
+      "duration": 0.13931972789115576,
+      "confidence": 0.8982191858238374,
+      "votes": 4,
+      "methods": [
+        "pyin",
+        "cqt",
+        "basic_pitch",
+        "piptrack"
+      ],
+      "frequency": 147.6707927400198,
+      "pitch_spread_cents": 43.78039875811486
+    },
+    {
+      "midi": 57,
+      "name": "A3",
+      "start_time": 5.865606349206349,
+      "end_time": 5.944308390022675,
+      "duration": 0.07870204081632615,
+      "confidence": 0.917869345609998,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 221.28211203991023,
+      "pitch_spread_cents": 44.74629229768794
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 6.408707482993197,
+      "end_time": 6.733786848072562,
+      "duration": 0.32507936507936463,
+      "confidence": 0.9428170321059076,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.90340686127504,
+      "pitch_spread_cents": 33.92853303629011
+    },
+    {
+      "midi": 52,
+      "name": "E3",
+      "start_time": 6.501587301587302,
+      "end_time": 6.594467120181405,
+      "duration": 0.09287981859410355,
+      "confidence": 0.9101630591241289,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 164.51588132222366,
+      "pitch_spread_cents": 22.499463388936537
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 6.780226757369615,
+      "end_time": 7.4071655328798185,
+      "duration": 0.6269387755102036,
+      "confidence": 0.9725610493682826,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.81328954132589,
+      "pitch_spread_cents": 29.2824776353248
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 7.685804988662132,
+      "end_time": 7.852196371882086,
+      "duration": 0.1663913832199544,
+      "confidence": 0.9048057099097697,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.59194275791091,
+      "pitch_spread_cents": 37.678876201639945
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 7.987664399092971,
+      "end_time": 8.219863945578231,
+      "duration": 0.2321995464852602,
+      "confidence": 0.9382141521892225,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.67396536039946,
+      "pitch_spread_cents": 41.34082168349143
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 8.312743764172335,
+      "end_time": 8.498503401360544,
+      "duration": 0.18575963718820887,
+      "confidence": 0.9739737474345516,
+      "votes": 4,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "pyin",
+        "basic_pitch"
+      ],
+      "frequency": 109.4910088717103,
+      "pitch_spread_cents": 41.5594806707934
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 8.6378231292517,
+      "end_time": 8.870022675736962,
+      "duration": 0.23219954648526198,
+      "confidence": 0.9799322368172397,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.90742976168008,
+      "pitch_spread_cents": 49.58858362027855
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 9.009342403628118,
+      "end_time": 9.24154195011338,
+      "duration": 0.23219954648526198,
+      "confidence": 0.9240184690233976,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.8951376333436,
+      "pitch_spread_cents": 44.54618998265267
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 9.281507482993197,
+      "end_time": 9.334421768707484,
+      "duration": 0.052914285714287246,
+      "confidence": 0.937093925770568,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 110.16943755999304,
+      "pitch_spread_cents": 10.730692835475539
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 9.427301587301587,
+      "end_time": 9.525317006802721,
+      "duration": 0.09801541950113446,
+      "confidence": 0.8790778139191971,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 110.03857674172968,
+      "pitch_spread_cents": 39.24692384330908
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 9.56014693877551,
+      "end_time": 9.938140589569162,
+      "duration": 0.3779936507936519,
+      "confidence": 0.8904320556659672,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.87961732124371,
+      "pitch_spread_cents": 33.337072478406846
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 9.984580498866213,
+      "end_time": 10.199979591836735,
+      "duration": 0.21539909297052162,
+      "confidence": 0.9328341702429276,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.80484059538713,
+      "pitch_spread_cents": 54.43202642803687
+    },
+    {
+      "midi": 52,
+      "name": "E3",
+      "start_time": 10.193560090702947,
+      "end_time": 10.286439909297053,
+      "duration": 0.09287981859410621,
+      "confidence": 0.9254293359657227,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 165.09705303580154,
+      "pitch_spread_cents": 44.831829853596666
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 10.29285941043084,
+      "end_time": 10.7740589569161,
+      "duration": 0.48119954648526075,
+      "confidence": 0.9334949332090968,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 110.20447733137372,
+      "pitch_spread_cents": 35.573535601342755
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 10.815308390022677,
+      "end_time": 11.291317460317462,
+      "duration": 0.47600907029478456,
+      "confidence": 0.8993477764414098,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.68681836972499,
+      "pitch_spread_cents": 44.53748358895306
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 11.331337868480725,
+      "end_time": 11.563537414965987,
+      "duration": 0.23219954648526198,
+      "confidence": 0.9760354045513143,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 110.04207862801891,
+      "pitch_spread_cents": 45.2011728745725
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 11.656417233560092,
+      "end_time": 11.911836734693878,
+      "duration": 0.25541950113378675,
+      "confidence": 0.9298847130757729,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.6990857939129,
+      "pitch_spread_cents": 71.02433136124597
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 11.954370068027211,
+      "end_time": 12.283356009070296,
+      "duration": 0.32898594104308465,
+      "confidence": 0.8857471998210756,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 110.38541079750244,
+      "pitch_spread_cents": 36.20272761370768
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 12.581308843537416,
+      "end_time": 12.956734693877552,
+      "duration": 0.375425850340136,
+      "confidence": 0.8549665021125792,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.95526203424832,
+      "pitch_spread_cents": 48.47575525876458
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 13.25859410430839,
+      "end_time": 13.32825396825397,
+      "duration": 0.06965986394557966,
+      "confidence": 0.8453686189652423,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.57431058344822,
+      "pitch_spread_cents": 29.430733781222724
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 13.846796371882087,
+      "end_time": 14.466031746031746,
+      "duration": 0.6192353741496586,
+      "confidence": 0.9709780491297391,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.64071041872702,
+      "pitch_spread_cents": 58.03314459773829
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 14.776878458049886,
+      "end_time": 14.985858049886621,
+      "duration": 0.20897959183673542,
+      "confidence": 0.9388324694931611,
+      "votes": 4,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "pyin",
+        "basic_pitch"
+      ],
+      "frequency": 110.1145375190433,
+      "pitch_spread_cents": 25.53825356179413
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 15.02068798185941,
+      "end_time": 15.162630385487528,
+      "duration": 0.14194240362811783,
+      "confidence": 0.9659547099195548,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.88476861081851,
+      "pitch_spread_cents": 25.484692195662838
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 15.368987301587302,
+      "end_time": 15.673469387755102,
+      "duration": 0.30448208616780015,
+      "confidence": 0.9318155599393864,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 110.21548812003132,
+      "pitch_spread_cents": 50.06036452583829
+    },
+    {
+      "midi": 57,
+      "name": "A3",
+      "start_time": 16.11330975056689,
+      "end_time": 16.277188208616778,
+      "duration": 0.16387845804988643,
+      "confidence": 0.8293631157817467,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 220.46966301181402,
+      "pitch_spread_cents": 26.11518612528914
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 16.32362811791383,
+      "end_time": 16.579047619047618,
+      "duration": 0.25541950113378675,
+      "confidence": 0.9019119212935506,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.81533293470272,
+      "pitch_spread_cents": 41.96332013789643
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 16.856348299319727,
+      "end_time": 17.239477551020403,
+      "duration": 0.3831292517006766,
+      "confidence": 0.9324540486346099,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 110.26369303871022,
+      "pitch_spread_cents": 41.68928173375436
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 17.41496598639456,
+      "end_time": 17.8097052154195,
+      "duration": 0.39473922902493896,
+      "confidence": 0.9345647246062782,
+      "votes": 4,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "pyin",
+        "basic_pitch"
+      ],
+      "frequency": 110.10829109018061,
+      "pitch_spread_cents": 44.584055430758895
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 18.0766798185941,
+      "end_time": 18.3437641723356,
+      "duration": 0.26708435374149886,
+      "confidence": 0.9502299276065397,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 110.12964541352795,
+      "pitch_spread_cents": 40.44007751319469
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 18.424979138321994,
+      "end_time": 18.50630385487528,
+      "duration": 0.08132471655328644,
+      "confidence": 0.904420231574005,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.24383324614477,
+      "pitch_spread_cents": 49.56238616660196
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 18.64556870748299,
+      "end_time": 18.99392290249433,
+      "duration": 0.34835419501133913,
+      "confidence": 0.9507215202151341,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.97478307068783,
+      "pitch_spread_cents": 37.33922847125776
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 19.06358276643991,
+      "end_time": 19.29578231292517,
+      "duration": 0.23219954648525842,
+      "confidence": 0.9454070282151618,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.84375571295269,
+      "pitch_spread_cents": 27.717340581919572
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 19.66724671201814,
+      "end_time": 19.982,
+      "duration": 0.3147532879818584,
+      "confidence": 0.8923849710981203,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.8053391427512,
+      "pitch_spread_cents": 38.99895679165135
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 20.131700680272107,
+      "end_time": 20.36512925170068,
+      "duration": 0.23342857142857198,
+      "confidence": 0.9341707079594906,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.8078617931001,
+      "pitch_spread_cents": 17.028884164134336
+    },
+    {
+      "midi": 45,
+      "name": "A2",
+      "start_time": 20.503219954648525,
+      "end_time": 20.574108843537417,
+      "duration": 0.07088888888889144,
+      "confidence": 0.8292401611607073,
+      "votes": 3,
+      "methods": [
+        "piptrack",
+        "cqt",
+        "basic_pitch"
+      ],
+      "frequency": 109.57832549521169,
+      "pitch_spread_cents": 21.18730180030481
+    }
+  ],
+  "config": {
+    "min_votes": 2,
+    "min_confidence": 0.5,
+    "min_duration": 0.05
+  }
+}
