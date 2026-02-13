@@ -4832,6 +4832,16 @@ Examples:
                             help='Genre for optimized detection (metal, rock, blues). '
                                  'Adjusts scale priors, technique sensitivity, and tempo expectations.')
     
+    # Add pattern matching arguments
+    if HAS_PATTERN_MATCHING:
+        add_pattern_args(parser)
+    else:
+        # Fallback if module not loaded
+        parser.add_argument('--pattern-match', action='store_true',
+                            help='Enable pattern-based note correction (pentatonic runs, blues licks, arpeggios)')
+        parser.add_argument('--pattern-threshold', type=float, default=0.70,
+                            help='Minimum pattern match score (default: 0.70 = 70%%)')
+    
     # Add solo range detection arguments
     if HAS_SOLO_DETECTION:
         add_solo_detection_args(parser)
@@ -4942,6 +4952,8 @@ Examples:
     if getattr(args, 'scale_constrain', False):
         scale_type_info = getattr(args, 'scale_constrain_type', None) or 'auto'
         print(f"Scale Constraint: ENABLED (scale: {scale_type_info})")
+    if getattr(args, 'position_tracking', False) and HAS_POSITION_TRACKING:
+        print(f"Position Tracking: ENABLED (fretboard physical constraints)")
     print()
     
     # Detect notes - use polyphonic or monophonic detection
@@ -5375,6 +5387,21 @@ Examples:
             print("\n🎸 Using solo-aware fret placement...")
             tab_notes = notes_to_tabs_with_solo_detection(
                 notes, detected_sections, tuning, verbose=args.string_detection_verbose
+            )
+        elif use_position:
+            # Use position tracking for fret placement
+            position_config = None
+            if HAS_POSITION_TRACKING:
+                position_config = PositionTrackerConfig(
+                    prefer_low_frets=True,
+                    low_fret_bonus=getattr(args, 'position_low_fret_bonus', 0.5),
+                    position_shift_cost=getattr(args, 'position_shift_cost', 2.0),
+                    max_instant_shift=getattr(args, 'position_max_instant', 4),
+                    verbose=getattr(args, 'position_verbose', False)
+                )
+            tab_notes = notes_to_tabs_position(
+                notes, tuning=tuning, config=position_config,
+                verbose=getattr(args, 'position_verbose', False)
             )
         elif use_spectral:
             tab_notes = notes_to_tabs_spectral(
