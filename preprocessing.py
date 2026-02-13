@@ -560,6 +560,304 @@ def apply_normalization(
     return y * gain
 
 
+def apply_de_distortion(
+    y: np.ndarray,
+    sr: int,
+    strength: float = 0.5,
+    threshold: float = 0.3
+) -> np.ndarray:
+    """
+    Apply inverse saturation curve to partially undo distortion clipping.
+    
+    Distortion typically applies a saturation/clipping curve like tanh or 
+    hard clipping. This attempts to apply an inverse curve to recover
+    some of the original dynamics.
+    
+    Args:
+        y: Audio signal
+        sr: Sample rate
+        strength: How aggressively to apply (0.0-1.0)
+        threshold: Signal level above which to apply the inverse curve
+        
+    Returns:
+        De-distorted audio
+    """
+    output = y.copy()
+    
+    # Find samples above threshold
+    abs_y = np.abs(output)
+    above_threshold = abs_y > threshold
+    
+    if not np.any(above_threshold):
+        return output
+    
+    # Apply inverse tanh (artanh) to expand compressed peaks
+    # tanh(x) compresses, so artanh(x) expands
+    # We blend between original and expanded based on strength
+    
+    # Normalize to [-1, 1] range for processing
+    peak = np.max(abs_y)
+    if peak > 0:
+        normalized = output / peak
+    else:
+        return output
+    
+    # Apply inverse saturation only to parts above threshold
+    # Use a soft expansion curve: sign(x) * |x|^(1/compression_factor)
+    # This is gentler than artanh which can blow up near ±1
+    
+    expansion_factor = 1.0 + strength * 0.5  # 1.0 to 1.5
+    
+    expanded = np.sign(normalized) * np.power(np.abs(normalized), 1.0 / expansion_factor)
+    
+    # Blend based on threshold - only expand louder parts
+    blend_factor = np.zeros_like(output)
+    blend_factor[above_threshold] = ((abs_y[above_threshold] - threshold) / 
+                                      (1.0 - threshold + 1e-6)) * strength
+    blend_factor = np.clip(blend_factor, 0, 1)
+    
+    result = output * (1 - blend_factor) + expanded * peak * blend_factor
+    
+    # Prevent clipping
+    max_val = np.max(np.abs(result))
+    if max_val > 1.0:
+        result = result / max_val * 0.99
+    
+    return result
+
+
+def apply_intermod_removal(
+    y: np.ndarray,
+    sr: int,
+    threshold: float = 0.15,
+    n_bands: int = 24
+) -> np.ndarray:
+    """
+    Remove intermodulation artifacts common in distorted guitar.
+    
+    When multiple notes are played through distortion, sum and difference
+    frequencies appear (intermodulation). This identifies and attenuates
+    these artifacts using spectral analysis.
+    
+    Args:
+        y: Audio signal
+        sr: Sample rate
+        threshold: Spectral flatness threshold below which to attenuate
+        n_bands: Number of frequency bands for analysis
+        
+    Returns:
+        Cleaned audio
+    """
+    # Use STFT for frequency analysis
+    n_fft = 2048
+    hop_length = 512
+    
+    # Compute STFT
+    D = librosa.stft(y, n_fft=n_fft, hop_length=hop_length)
+    magnitude = np.abs(D)
+    phase = np.angle(D)
+    
+    # Compute spectral flatness per frame
+    # Low flatness = tonal, high flatness = noisy/intermod
+    spectral_flatness = librosa.feature.spectral_flatness(S=magnitude)[0]
+    
+    # Also look at spectral contrast - intermod tends to fill in gaps
+    spectral_contrast = librosa.feature.spectral_contrast(
+        S=magnitude, sr=sr, n_bands=6
+    )
+    contrast_mean = np.mean(spectral_contrast, axis=0)
+    
+    # Frames with high flatness AND low contrast likely have intermod
+    intermod_likelihood = spectral_flatness * (1 - contrast_mean / np.max(contrast_mean + 1e-6))
+    
+    # Create frequency-dependent attenuation
+    # Intermod products are often in specific frequency regions
+    freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
+    
+    # Focus on mid-range where intermod is most audible (200Hz - 2kHz)
+    intermod_band = (freqs > 200) & (freqs < 2000)
+    
+    # Create gain mask
+    gain = np.ones_like(magnitude)
+    
+    for frame_idx in range(magnitude.shape[1]):
+        if intermod_likelihood[frame_idx] > threshold:
+            # Calculate per-frequency attenuation in intermod band
+            reduction = 1.0 - (intermod_likelihood[frame_idx] - threshold) / (1 - threshold + 1e-6) * 0.3
+            reduction = max(0.7, reduction)  # Don't attenuate more than 30%
+            gain[intermod_band, frame_idx] *= reduction
+    
+    # Apply gain smoothly
+    from scipy.ndimage import gaussian_filter
+    gain = gaussian_filter(gain, sigma=[2, 3])
+    
+    # Reconstruct
+    D_cleaned = magnitude * gain * np.exp(1j * phase)
+    y_cleaned = librosa.istft(D_cleaned, hop_length=hop_length, length=len(y))
+    
+    return y_cleaned
+
+
+def apply_fundamental_enhancement(
+    y: np.ndarray,
+    sr: int,
+    freq_range: Tuple[float, float] = (70.0, 800.0),
+    strength: float = 0.4
+) -> np.ndarray:
+    """
+    Enhance fundamental frequencies to make pitch detection easier.
+    
+    Distortion adds many harmonics that can confuse pitch detection.
+    This boosts the fundamental frequency band relative to harmonics.
+    
+    Args:
+        y: Audio signal
+        sr: Sample rate
+        freq_range: Frequency range for fundamentals
+        strength: Enhancement strength (0.0-1.0)
+        
+    Returns:
+        Enhanced audio
+    """
+    n_fft = 2048
+    hop_length = 512
+    
+    # STFT
+    D = librosa.stft(y, n_fft=n_fft, hop_length=hop_length)
+    magnitude = np.abs(D)
+    phase = np.angle(D)
+    
+    freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
+    
+    # Create frequency-dependent gain curve
+    # Boost fundamentals, gently attenuate higher harmonics
+    gain = np.ones(len(freqs))
+    
+    # Fundamental region: boost
+    fundamental_band = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
+    gain[fundamental_band] = 1.0 + strength
+    
+    # Harmonic region (above fundamentals): gentle roll-off
+    harmonic_band = freqs > freq_range[1]
+    if np.any(harmonic_band):
+        # Logarithmic roll-off
+        harmonic_freqs = freqs[harmonic_band]
+        rolloff = 1.0 - strength * 0.5 * np.log2(harmonic_freqs / freq_range[1]) / 4
+        rolloff = np.clip(rolloff, 0.5, 1.0)
+        gain[harmonic_band] = rolloff
+    
+    # Apply gain
+    gain_2d = gain[:, np.newaxis]
+    magnitude_enhanced = magnitude * gain_2d
+    
+    # Reconstruct
+    D_enhanced = magnitude_enhanced * np.exp(1j * phase)
+    y_enhanced = librosa.istft(D_enhanced, hop_length=hop_length, length=len(y))
+    
+    # Normalize to avoid clipping
+    peak = np.max(np.abs(y_enhanced))
+    if peak > 1.0:
+        y_enhanced = y_enhanced / peak * 0.99
+    
+    return y_enhanced
+
+
+def preprocess_distortion(
+    y: np.ndarray,
+    sr: int,
+    config: DistortionPreprocessingConfig,
+    verbose: bool = True
+) -> np.ndarray:
+    """
+    Apply distortion-specific preprocessing pipeline.
+    
+    Designed for heavily distorted electric guitar recordings where
+    standard preprocessing is insufficient.
+    
+    Args:
+        y: Audio signal (mono)
+        sr: Sample rate
+        config: Distortion preprocessing configuration
+        verbose: Print progress messages
+        
+    Returns:
+        Preprocessed audio
+    """
+    if not config.enabled:
+        return y
+    
+    output = y.copy()
+    
+    def log(msg):
+        if verbose:
+            print(f"  {msg}")
+    
+    log("⚡ Distortion preprocessing pipeline active")
+    
+    # 1. High-pass filter first (remove rumble)
+    if config.highpass:
+        log(f"🔊 High-pass filter @ {config.highpass_freq:.0f} Hz")
+        output = apply_highpass_filter(
+            output, sr,
+            cutoff=config.highpass_freq,
+            order=config.highpass_order
+        )
+    
+    # 2. De-distortion (inverse saturation)
+    if config.de_distort:
+        log(f"🔄 De-distortion (strength: {config.de_distort_strength:.2f})")
+        output = apply_de_distortion(
+            output, sr,
+            strength=config.de_distort_strength,
+            threshold=config.de_distort_threshold
+        )
+    
+    # 3. Compression (even out remaining dynamics)
+    if config.compress:
+        log(f"📊 Compression ({config.compress_ratio:.1f}:1 @ {config.compress_threshold_db:.0f} dB)")
+        output = apply_compression(
+            output, sr,
+            threshold_db=config.compress_threshold_db,
+            ratio=config.compress_ratio,
+            attack_ms=config.compress_attack_ms,
+            release_ms=config.compress_release_ms
+        )
+    
+    # 4. Intermodulation artifact removal
+    if config.remove_intermod:
+        log(f"🧹 Removing intermodulation artifacts")
+        output = apply_intermod_removal(
+            output, sr,
+            threshold=config.intermod_threshold,
+            n_bands=config.intermod_freq_bands
+        )
+    
+    # 5. Fundamental frequency enhancement
+    if config.fundamental_enhance:
+        log(f"🎵 Enhancing fundamentals ({config.fundamental_freq_range[0]:.0f}-{config.fundamental_freq_range[1]:.0f} Hz)")
+        output = apply_fundamental_enhancement(
+            output, sr,
+            freq_range=config.fundamental_freq_range,
+            strength=config.fundamental_strength
+        )
+    
+    # 6. Low-pass filter (remove harsh high harmonics)
+    if config.lowpass:
+        log(f"🔉 Low-pass filter @ {config.lowpass_freq:.0f} Hz")
+        output = apply_lowpass_filter(
+            output, sr,
+            cutoff=config.lowpass_freq,
+            order=config.lowpass_order
+        )
+    
+    # 7. Final normalization
+    if config.normalize:
+        log(f"📈 Normalizing to {config.target_db:.0f} dB")
+        output = apply_normalization(output, target_db=config.target_db)
+    
+    return output
+
+
 def preprocess_audio(
     y: np.ndarray,
     sr: int,
@@ -672,6 +970,33 @@ def add_preprocessing_args(parser):
         '--preprocess', '-P',
         action='store_true',
         help='Enable audio preprocessing pipeline'
+    )
+    
+    preproc.add_argument(
+        '--preprocess-distortion', '-D',
+        action='store_true',
+        help='Enable distortion-specific preprocessing (compression, de-distortion, '
+             'low-pass filter, fundamental enhancement, intermod removal)'
+    )
+    
+    # Distortion-specific parameters
+    preproc.add_argument(
+        '--distort-lowpass',
+        type=float,
+        metavar='HZ',
+        help='Low-pass cutoff for distortion preprocessing (default: 4000 Hz)'
+    )
+    preproc.add_argument(
+        '--de-distort-strength',
+        type=float,
+        metavar='N',
+        help='De-distortion strength (0.0-1.0, default: 0.5)'
+    )
+    preproc.add_argument(
+        '--fundamental-strength',
+        type=float,
+        metavar='N',
+        help='Fundamental enhancement strength (0.0-1.0, default: 0.4)'
     )
     
     preproc.add_argument(

@@ -263,10 +263,11 @@ class EssentiaPitchDetector:
         )
         
         # HMM smoothing
+        # Parameters: minFrequency, numberBinsPerSemitone, selfTransition, yinTrust
         yin_hmm = es.PitchYinProbabilitiesHMM(
             minFrequency=GUITAR_MIN_HZ,
-            maxFrequency=GUITAR_MAX_HZ,
-            sampleRate=self.sr
+            numberBinsPerSemitone=5,  # Resolution
+            yinTrust=0.5  # Trust in YIN estimates
         )
         
         # Collect frame probabilities
@@ -342,19 +343,28 @@ class ParselMouthPitchDetector:
         )
         
         frames = []
-        for t in pitch.xs():
-            freq = pitch.get_value_at_time(t)
+        n_frames = pitch.get_number_of_frames()
+        
+        for i in range(1, n_frames + 1):  # Praat is 1-indexed
+            t = pitch.get_time_from_frame_number(i)
+            freq = pitch.get_value_in_frame(i)
             
-            if freq and not np.isnan(freq):
-                # Get strength (confidence proxy)
-                strength = pitch.get_strength_at_time(t)
+            if freq and not np.isnan(freq) and GUITAR_MIN_HZ <= freq <= GUITAR_MAX_HZ:
+                # Get frame to access candidate strength
+                frame = pitch.get_frame(i)
+                # Use intensity or candidate strength as confidence proxy
+                strength = 0.7
+                if hasattr(frame, 'intensity') and frame.intensity:
+                    strength = min(1.0, frame.intensity / 100.0)  # Normalize intensity
+                elif hasattr(frame, 'candidates') and len(frame.candidates) > 0:
+                    # First candidate's strength
+                    strength = frame.candidates[0].strength if hasattr(frame.candidates[0], 'strength') else 0.7
                 
-                if strength and not np.isnan(strength):
-                    frames.append(PitchFrame(
-                        time=t,
-                        frequency=float(freq),
-                        confidence=float(strength)
-                    ))
+                frames.append(PitchFrame(
+                    time=t,
+                    frequency=float(freq),
+                    confidence=float(strength)
+                ))
         
         return frames
     
@@ -374,18 +384,27 @@ class ParselMouthPitchDetector:
         )
         
         frames = []
-        for t in pitch.xs():
-            freq = pitch.get_value_at_time(t)
+        n_frames = pitch.get_number_of_frames()
+        
+        for i in range(1, n_frames + 1):
+            t = pitch.get_time_from_frame_number(i)
+            freq = pitch.get_value_in_frame(i)
             
-            if freq and not np.isnan(freq):
-                strength = pitch.get_strength_at_time(t)
+            if freq and not np.isnan(freq) and GUITAR_MIN_HZ <= freq <= GUITAR_MAX_HZ:
+                frame = pitch.get_frame(i)
+                strength = 0.7
+                if hasattr(frame, 'candidates') and len(frame.candidates) > 0:
+                    # Use first candidate's strength
+                    try:
+                        strength = frame.candidates[0].strength
+                    except:
+                        strength = 0.7
                 
-                if strength and not np.isnan(strength):
-                    frames.append(PitchFrame(
-                        time=t,
-                        frequency=float(freq),
-                        confidence=float(strength)
-                    ))
+                frames.append(PitchFrame(
+                    time=t,
+                    frequency=float(freq),
+                    confidence=float(strength)
+                ))
         
         return frames
     
@@ -399,23 +418,35 @@ class ParselMouthPitchDetector:
         sound = parselmouth.Sound(audio, sampling_frequency=self.sr)
         
         # Use raw Praat command for SHS
-        pitch = call(sound, "To Pitch (shs)...",
-                     time_step,
-                     GUITAR_MIN_HZ,
-                     15,  # max candidates
-                     GUITAR_MAX_HZ,
-                     15,  # max subharmonics
-                     0.84,  # compression factor
-                     0.0,  # ceiling (0 = use pitch ceiling)
-                     0.02  # points per octave
-                     )
+        # Arguments: Time step, Minimum pitch, Max candidates, Maximum frequency,
+        #            Max subharmonics, Compression factor, Number of points per octave, Ceiling
+        try:
+            pitch = call(sound, "To Pitch (shs)...",
+                         time_step,      # time step (s)
+                         GUITAR_MIN_HZ,  # minimum pitch (Hz)
+                         15,             # max candidates
+                         GUITAR_MAX_HZ,  # maximum frequency (Hz)
+                         15,             # max subharmonics
+                         0.84,           # compression factor
+                         1.0,            # number of points per octave
+                         GUITAR_MAX_HZ   # ceiling (Hz) - must be > 0
+                         )
+        except Exception as e:
+            # Fall back to simpler pitch extraction
+            pitch = sound.to_pitch(
+                time_step=time_step,
+                pitch_floor=GUITAR_MIN_HZ,
+                pitch_ceiling=GUITAR_MAX_HZ
+            )
         
         frames = []
-        for i in range(call(pitch, "Get number of frames")):
-            t = call(pitch, "Get time from frame number...", i + 1)
-            freq = call(pitch, "Get value in frame...", i + 1, "Hertz")
+        n_frames = pitch.get_number_of_frames()
+        
+        for i in range(1, n_frames + 1):
+            t = pitch.get_time_from_frame_number(i)
+            freq = pitch.get_value_in_frame(i)
             
-            if freq and not np.isnan(freq):
+            if freq and not np.isnan(freq) and GUITAR_MIN_HZ <= freq <= GUITAR_MAX_HZ:
                 frames.append(PitchFrame(
                     time=t,
                     frequency=float(freq),

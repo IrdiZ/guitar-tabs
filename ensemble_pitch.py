@@ -92,6 +92,7 @@ class EnsembleConfig:
     use_crepe: bool = True
     use_basic_pitch: bool = True
     use_piptrack: bool = True
+    use_hps: bool = True  # Harmonic Product Spectrum - BEST FOR DISTORTED GUITAR
     
     # Detector weights (higher = more trusted)
     weights: Dict[str, float] = field(default_factory=lambda: {
@@ -100,6 +101,7 @@ class EnsembleConfig:
         'crepe': 1.5,      # CREPE is most accurate for monophonic
         'basic_pitch': 1.2, # Good for polyphonic
         'piptrack': 0.6,    # Less accurate but fast
+        'hps': 1.3,        # HPS - excellent for distorted guitar where harmonics dominate
     })
     
     # Consensus parameters
@@ -155,6 +157,9 @@ class EnsemblePitchDetector:
         
         if self.config.use_piptrack:
             methods.append('piptrack')
+        
+        if self.config.use_hps:
+            methods.append('hps')  # HPS is always available (pure numpy/scipy)
         
         return methods
     
@@ -225,6 +230,8 @@ class EnsemblePitchDetector:
             return self._detect_basic_pitch_docker(audio_path)
         elif method == 'piptrack':
             return self._detect_piptrack(y)
+        elif method == 'hps':
+            return self._detect_hps(y)
         else:
             raise ValueError(f"Unknown method: {method}")
     

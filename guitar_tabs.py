@@ -44,7 +44,9 @@ import soundfile as sf
 # Import preprocessing module
 from preprocessing import (
     PreprocessingConfig,
+    DistortionPreprocessingConfig,
     preprocess_audio,
+    preprocess_distortion,
     add_preprocessing_args
 )
 
@@ -1152,6 +1154,157 @@ def detect_pitch_crepe(
     return f0, voiced_flag, confidence
 
 
+def detect_pitch_hps(
+    y: np.ndarray,
+    sr: int,
+    hop_length: int = 512,
+    n_fft: int = 4096,
+    num_harmonics: int = 5,
+    fmin: float = GUITAR_MIN_HZ,
+    fmax: float = GUITAR_MAX_HZ
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Detect pitch using Harmonic Product Spectrum (HPS).
+    
+    HPS is CRITICAL for distorted guitar where harmonics dominate the fundamental.
+    
+    The algorithm:
+    1. Compute FFT magnitude spectrum
+    2. Downsample spectrum by factors of 2, 3, 4, 5
+    3. Multiply all downsampled versions together
+    4. The fundamental frequency "pops out" as the peak
+    
+    This works because:
+    - Fundamental at f0 appears at f0
+    - 2nd harmonic at 2*f0, when downsampled 2x, aligns with f0
+    - 3rd harmonic at 3*f0, when downsampled 3x, aligns with f0
+    - etc.
+    
+    So even when harmonics are STRONGER than the fundamental (common in 
+    distorted guitar), they all vote for the true fundamental frequency.
+    
+    Args:
+        y: Audio signal
+        sr: Sample rate  
+        hop_length: Hop length between frames
+        n_fft: FFT size (larger = better frequency resolution)
+        num_harmonics: Number of harmonic products (2-5 typical)
+        fmin: Minimum frequency to consider
+        fmax: Maximum frequency to consider
+        
+    Returns:
+        f0: Fundamental frequency per frame (Hz), 0 for unvoiced
+        voiced_flag: Boolean array of voiced frame indicators
+        confidence: Confidence values (0-1) based on peak prominence
+    """
+    print(f"  HPS: Using {num_harmonics} harmonic products, n_fft={n_fft}")
+    
+    # Compute STFT
+    S = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=hop_length))
+    n_bins, n_frames = S.shape
+    
+    # Frequency bins
+    freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
+    
+    # Find bin indices for frequency range
+    min_bin = np.searchsorted(freqs, fmin)
+    max_bin = np.searchsorted(freqs, fmax)
+    
+    # Ensure we have enough bins for downsampling
+    # Need at least max_bin * num_harmonics bins
+    max_valid_bin = n_bins // num_harmonics
+    max_bin = min(max_bin, max_valid_bin)
+    
+    if min_bin >= max_bin:
+        print(f"  HPS: Warning - frequency range too narrow, adjusting")
+        min_bin = max(1, max_bin - 100)
+    
+    f0 = np.zeros(n_frames)
+    confidence = np.zeros(n_frames)
+    voiced_flag = np.zeros(n_frames, dtype=bool)
+    
+    for frame_idx in range(n_frames):
+        spectrum = S[:, frame_idx]
+        
+        # Skip silent frames
+        if np.max(spectrum) < 1e-10:
+            continue
+        
+        # Normalize spectrum
+        spectrum_norm = spectrum / (np.max(spectrum) + 1e-10)
+        
+        # Initialize HPS with original spectrum (limited to valid range)
+        # We need spectrum up to max_bin * num_harmonics for downsampling
+        hps_len = max_bin
+        hps = spectrum_norm[:hps_len].copy()
+        
+        # Multiply by downsampled versions
+        for h in range(2, num_harmonics + 1):
+            # Downsample by factor h (take every h-th sample)
+            # This aligns harmonic h with the fundamental
+            downsampled_len = hps_len
+            downsampled = np.zeros(downsampled_len)
+            
+            for i in range(downsampled_len):
+                src_idx = i * h
+                if src_idx < len(spectrum_norm):
+                    downsampled[i] = spectrum_norm[src_idx]
+            
+            # Multiply into HPS
+            hps *= downsampled
+        
+        # Find the peak in the valid frequency range
+        search_start = min_bin
+        search_end = max_bin
+        
+        if search_start >= search_end or search_end > len(hps):
+            continue
+        
+        hps_search = hps[search_start:search_end]
+        
+        if len(hps_search) == 0 or np.max(hps_search) < 1e-20:
+            continue
+        
+        # Find peak
+        peak_idx_local = np.argmax(hps_search)
+        peak_idx = peak_idx_local + search_start
+        peak_val = hps[peak_idx]
+        
+        # Calculate confidence based on peak prominence
+        # Compare peak to median of surrounding bins
+        window = 10
+        start = max(search_start, peak_idx - window)
+        end = min(search_end, peak_idx + window)
+        local_median = np.median(hps[start:end])
+        
+        if local_median > 0:
+            prominence = peak_val / local_median
+            conf = min(1.0, prominence / 10.0)  # Normalize: 10x prominence = full confidence
+        else:
+            conf = 0.5 if peak_val > 0 else 0.0
+        
+        # Only accept if confidence is reasonable
+        if conf > 0.2:
+            f0[frame_idx] = freqs[peak_idx]
+            confidence[frame_idx] = conf
+            voiced_flag[frame_idx] = True
+    
+    # Apply median filter to reduce octave jumps
+    if np.sum(voiced_flag) > 5:
+        valid_f0 = f0[voiced_flag]
+        filtered = medfilt(valid_f0, kernel_size=min(5, len(valid_f0) | 1))
+        f0[voiced_flag] = filtered
+    
+    n_voiced = np.sum(voiced_flag)
+    print(f"  HPS: Detected {n_voiced} voiced frames out of {n_frames}")
+    
+    if n_voiced > 0:
+        avg_f0 = np.mean(f0[voiced_flag])
+        print(f"  HPS: Average pitch = {avg_f0:.1f} Hz ({librosa.hz_to_note(avg_f0)})")
+    
+    return f0, voiced_flag, confidence
+
+
 def detect_notes_basicpitch(
     audio_path: str,
     onset_threshold: float = 0.5,
@@ -1878,7 +2031,11 @@ def detect_notes_from_audio(
     freq_cleanup_config: Optional['FreqCleanupConfig'] = None,
     save_preprocessed: Optional[str] = None,
     crepe_model: str = 'small',
-    octave_correction: bool = True
+    octave_correction: bool = True,
+    lead_isolation_config: Optional['LeadIsolationConfig'] = None,
+    distortion_mode: bool = False,
+    distortion_harmonics: int = 5,
+    distortion_preprocess_config: Optional['DistortionPreprocessingConfig'] = None
 ) -> List[Note]:
     """
     Detect notes from audio file using advanced pitch detection.
@@ -1888,20 +2045,84 @@ def detect_notes_from_audio(
         hop_length: Hop length for STFT
         min_note_duration: Minimum note duration in seconds
         confidence_threshold: Minimum confidence for note detection
-        pitch_method: 'voting', 'pyin', 'piptrack', 'cqt', 'crepe', or 'basicpitch'
+        pitch_method: 'voting', 'pyin', 'piptrack', 'cqt', 'crepe', 'basicpitch', or 'hps'
             - voting: Multi-detector consensus (default, MOST ACCURATE)
             - pyin: Fast, good for monophonic
             - piptrack: Alternative monophonic
             - cqt: Constant-Q transform based
             - crepe: Deep learning (requires tensorflow)
             - basicpitch: Polyphonic - best for chords (requires Docker)
+            - hps: Harmonic Product Spectrum - BEST FOR DISTORTED GUITAR
         use_harmonic_separation: Whether to use HPSS
         median_filter_size: Size of median filter for pitch smoothing
         tuning: Guitar tuning (MIDI notes)
         preprocess_config: Optional preprocessing configuration
         save_preprocessed: Optional path to save preprocessed audio
         crepe_model: CREPE model capacity ('tiny', 'small', 'medium', 'large', 'full')
+        distortion_mode: Enable distortion-aware pitch detection (HPS-based)
+        distortion_harmonics: Number of harmonics for HPS in distortion mode
     """
+    # Distortion-aware pitch detection using Harmonic Product Spectrum
+    # Best for heavily distorted electric guitar
+    if distortion_mode and HAS_DISTORTION_PITCH:
+        print("\n🎸 Distortion-Aware Pitch Detection Mode")
+        print(f"   Using Harmonic Product Spectrum with {distortion_harmonics} harmonics")
+        print("   Optimized for: heavy distortion, power chords, high-gain tones")
+        
+        # Load audio
+        y, sr = librosa.load(audio_path, sr=22050, mono=True)
+        
+        # Apply frequency domain cleanup if configured
+        if HAS_FREQ_CLEANUP and freq_cleanup_config and freq_cleanup_config.enabled:
+            print("\n🎸 Applying frequency domain cleanup...")
+            y = freq_domain_cleanup(y, sr, freq_cleanup_config, verbose=True)
+        
+        # Apply preprocessing if configured
+        if preprocess_config and preprocess_config.enabled:
+            print("\n🔧 Applying audio preprocessing...")
+            y = preprocess_audio(y, sr, preprocess_config, verbose=True)
+        
+        # Configure distortion detector
+        dist_config = DistortionConfig(
+            hps_harmonics=distortion_harmonics,
+            min_confidence=confidence_threshold * 0.8,  # Lower threshold for HPS
+            n_fft=4096,  # Higher resolution for low frequencies
+            hop_length=hop_length,
+            verbose=True,
+            detect_intermod=True,
+            apply_compression_compensation=True
+        )
+        
+        # Run distortion-aware detection
+        detector = DistortionPitchDetector(sr=sr, config=dist_config)
+        dist_results = detector.detect(y)
+        
+        # Convert to Note objects
+        audio_duration = librosa.get_duration(y=y, sr=sr)
+        notes = distortion_convert_to_notes(
+            dist_results,
+            min_duration=min_note_duration,
+            audio_duration=audio_duration
+        )
+        
+        # Filter harmonics
+        print("Filtering harmonics...")
+        notes = filter_harmonic_notes(notes)
+        
+        # Apply octave correction if enabled
+        if octave_correction and HAS_OCTAVE_CORRECTION and len(notes) > 0:
+            print("Applying octave correction...")
+            notes = _apply_octave_correction_to_notes(y, sr, notes, tuning)
+        
+        # Summary statistics
+        power_chord_count = sum(1 for r in dist_results if r.is_power_chord)
+        print(f"\n✅ Detected {len(notes)} notes (distortion-aware)")
+        print(f"   Power chords detected: {power_chord_count}")
+        
+        return notes
+    elif distortion_mode and not HAS_DISTORTION_PITCH:
+        print("⚠️  distortion_pitch module not available, falling back to standard detection")
+    
     # Multi-model ensemble - MOST ACCURATE (runs pyin, cqt, crepe, basic_pitch, piptrack)
     if pitch_method == 'ensemble':
         if not HAS_ENSEMBLE:
@@ -2020,7 +2241,20 @@ def detect_notes_from_audio(
             return notes
     
     print(f"Loading audio: {audio_path}")
-    y, sr = librosa.load(audio_path, sr=22050, mono=True)
+    
+    # Apply lead guitar isolation if configured (does its own loading with demucs)
+    if lead_isolation_config and lead_isolation_config.enabled and HAS_LEAD_ISOLATION:
+        print("\n🎸 Isolating lead guitar...")
+        save_lead = getattr(lead_isolation_config, '_save_path', None)
+        y, sr = isolate_lead_guitar(audio_path, config=lead_isolation_config, 
+                                     verbose=True, save_path=save_lead)
+        # Resample to 22050 if needed
+        if sr != 22050:
+            y = librosa.resample(y, orig_sr=sr, target_sr=22050)
+            sr = 22050
+        print()
+    else:
+        y, sr = librosa.load(audio_path, sr=22050, mono=True)
     
     # Apply audio preprocessing if configured
     if preprocess_config and preprocess_config.enabled:
@@ -2128,6 +2362,24 @@ def detect_notes_from_audio(
         if median_filter_size > 1:
             f0 = apply_median_filter(f0, median_filter_size)
         
+        confidence = smooth_confidence(confidence, window_size=5)
+    
+    elif pitch_method == 'hps':
+        # Harmonic Product Spectrum - CRITICAL for distorted guitar
+        # where harmonics are often stronger than the fundamental
+        f0, voiced_flag, confidence = detect_pitch_hps(
+            y_pitch, sr, hop_length,
+            n_fft=4096,  # Larger FFT for better frequency resolution
+            num_harmonics=5,  # Use 5 harmonic products
+            fmin=GUITAR_MIN_HZ,
+            fmax=GUITAR_MAX_HZ
+        )
+        
+        # Apply median filter to reduce jitter
+        if median_filter_size > 1:
+            f0 = apply_median_filter(f0, median_filter_size)
+        
+        # Smooth confidence values
         confidence = smooth_confidence(confidence, window_size=5)
     
     print("Detecting onsets with ensemble method...")
@@ -2650,7 +2902,8 @@ def detect_notes_polyphonic(
     max_simultaneous: int = 6,
     tuning: List[int] = None,
     preprocess_config: Optional[PreprocessingConfig] = None,
-    save_preprocessed: Optional[str] = None
+    save_preprocessed: Optional[str] = None,
+    lead_isolation_config: Optional['LeadIsolationConfig'] = None
 ) -> List[Note]:
     """
     Detect multiple simultaneous notes from audio (polyphonic pitch detection).
@@ -2676,7 +2929,19 @@ def detect_notes_polyphonic(
     print(f"🎵 Polyphonic pitch detection using {method.upper()} method...")
     print(f"Loading audio: {audio_path}")
     
-    y, sr = librosa.load(audio_path, sr=22050, mono=True)
+    # Apply lead guitar isolation if configured
+    if lead_isolation_config and lead_isolation_config.enabled and HAS_LEAD_ISOLATION:
+        print("\n🎸 Isolating lead guitar...")
+        save_lead = getattr(lead_isolation_config, '_save_path', None)
+        y, sr = isolate_lead_guitar(audio_path, config=lead_isolation_config,
+                                     verbose=True, save_path=save_lead)
+        # Resample to 22050 if needed
+        if sr != 22050:
+            y = librosa.resample(y, orig_sr=sr, target_sr=22050)
+            sr = 22050
+        print()
+    else:
+        y, sr = librosa.load(audio_path, sr=22050, mono=True)
     
     # Apply audio preprocessing if configured
     if preprocess_config and preprocess_config.enabled:
@@ -4202,10 +4467,15 @@ Examples:
                         help='Artist name (for GP5/MusicXML export)')
     parser.add_argument('--tempo', type=int, default=120,
                         help='Tempo in BPM (default: 120)')
-    parser.add_argument('--pitch-method', '-p', choices=['segment', 'ensemble', 'voting', 'pyin', 'piptrack', 'cqt', 'crepe', 'basicpitch'], default='segment',
-                        help='Pitch detection: segment (BEST - precise note boundaries), ensemble (5 detector consensus), voting (legacy consensus), pyin (fast), piptrack, cqt, crepe (deep learning), basicpitch (polyphonic). Default: segment')
+    parser.add_argument('--pitch-method', '-p', choices=['segment', 'ensemble', 'voting', 'pyin', 'piptrack', 'cqt', 'crepe', 'basicpitch', 'hps'], default='segment',
+                        help='Pitch detection: segment (BEST - precise note boundaries), ensemble (5 detector consensus), voting (legacy consensus), pyin (fast), piptrack, cqt, crepe (deep learning), basicpitch (polyphonic), hps (Harmonic Product Spectrum - BEST FOR DISTORTED GUITAR). Default: segment')
     parser.add_argument('--crepe-model', choices=['tiny', 'small', 'medium', 'large', 'full'], default='small',
                         help='CREPE model capacity: tiny/small (fast), medium, large/full (accurate). Default: small')
+    parser.add_argument('--distortion', action='store_true',
+                        help='Enable distortion-aware pitch detection (for heavy/distorted electric guitar). '
+                             'Uses Harmonic Product Spectrum to find true fundamental when harmonics are strong.')
+    parser.add_argument('--distortion-harmonics', type=int, default=5,
+                        help='Number of harmonics for HPS in distortion mode (default: 5)')
     parser.add_argument('--min-votes', type=int, default=2,
                         help='Minimum detector votes for consensus (voting method). Default: 2')
     parser.add_argument('--no-harmonic-separation', action='store_true',
@@ -4325,10 +4595,21 @@ Examples:
     # Create preprocessing config
     preprocess_config = PreprocessingConfig.from_args(args)
     
+    # Create distortion preprocessing config
+    distortion_preprocess_config = DistortionPreprocessingConfig.from_args(args)
+    
     # Create frequency cleanup config
     freq_cleanup_config = None
     if HAS_FREQ_CLEANUP:
         freq_cleanup_config = freq_config_from_args(args)
+    
+    # Create lead guitar isolation config
+    lead_isolation_config = None
+    if HAS_LEAD_ISOLATION:
+        lead_isolation_config = lead_config_from_args(args)
+        # Store save path if specified
+        if lead_isolation_config.enabled and hasattr(args, 'save_lead_audio') and args.save_lead_audio:
+            lead_isolation_config._save_path = args.save_lead_audio
     
     print("🎸 Guitar Tab Generator (Enhanced)")
     print("=" * 40)
@@ -4344,8 +4625,14 @@ Examples:
         print(f"Median filter: {args.median_filter if args.median_filter > 0 else 'disabled'}")
     if preprocess_config.enabled:
         print(f"Preprocessing: ENABLED")
+    if distortion_preprocess_config.enabled:
+        print(f"Distortion Preprocessing: ENABLED")
+    if getattr(args, 'distortion', False):
+        print(f"Distortion Mode: ENABLED (HPS with {getattr(args, 'distortion_harmonics', 5)} harmonics)")
     if freq_cleanup_config and freq_cleanup_config.enabled:
         print(f"Frequency Cleanup: ENABLED")
+    if lead_isolation_config and lead_isolation_config.enabled:
+        print(f"Lead Isolation: ENABLED (Demucs + M/S + frequency)")
     print()
     
     # Detect notes - use polyphonic or monophonic detection
@@ -4358,7 +4645,8 @@ Examples:
             max_simultaneous=args.max_simultaneous,
             tuning=tuning,
             preprocess_config=preprocess_config,
-            save_preprocessed=getattr(args, 'save_preprocessed', None)
+            save_preprocessed=getattr(args, 'save_preprocessed', None),
+            lead_isolation_config=lead_isolation_config
         )
     else:
         notes = detect_notes_from_audio(
@@ -4373,7 +4661,10 @@ Examples:
             freq_cleanup_config=freq_cleanup_config,
             save_preprocessed=getattr(args, 'save_preprocessed', None),
             crepe_model=getattr(args, 'crepe_model', 'small'),
-            octave_correction=not getattr(args, 'no_octave_correction', False)
+            octave_correction=not getattr(args, 'no_octave_correction', False),
+            lead_isolation_config=lead_isolation_config,
+            distortion_mode=getattr(args, 'distortion', False),
+            distortion_harmonics=getattr(args, 'distortion_harmonics', 5)
         )
     
     if not notes:
