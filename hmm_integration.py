@@ -83,14 +83,25 @@ def run_yin_detection(audio_path: str, verbose: bool = True) -> Dict[str, Any]:
     Run YIN pitch detection (better for distorted audio).
     """
     try:
-        from yin_pitch import yin_pitch_track
+        from yin_pitch import yin_pitch_detection, YinConfig
         
         y, sr = librosa.load(audio_path, sr=22050)
-        times, f0, confidence = yin_pitch_track(
-            y, sr,
+        
+        config = YinConfig(
             fmin=librosa.note_to_hz('E2'),
-            fmax=librosa.note_to_hz('E6')
+            fmax=librosa.note_to_hz('E6'),
+            threshold=0.15,  # Slightly relaxed for distortion
+            confidence_threshold=0.2
         )
+        
+        # YIN returns (f0, voiced_flag, confidence) tuple
+        f0, voiced, confidence = yin_pitch_detection(y, sr, config)
+        
+        # Create time array
+        times = np.arange(len(f0)) * config.hop_length / sr
+        
+        # Zero out unvoiced frames
+        f0 = np.where(voiced, f0, 0.0)
         
         return {
             'times': times,
