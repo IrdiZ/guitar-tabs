@@ -145,21 +145,21 @@ class PinchHarmonicDetector:
         sr: int = 22050,
         hop_length: int = 256,  # Shorter for finer time resolution
         n_fft: int = 2048,
-        # Pinch harmonic thresholds (stricter for high-gain)
-        ph_centroid_ratio: float = 4.0,     # Centroid > 4x fundamental (stricter)
-        ph_high_energy_ratio: float = 0.5,  # 50%+ energy above 2kHz (stricter)
-        ph_transient_threshold: float = 2.5, # HF transient > 2.5x average
-        ph_freq_ratio_min: float = 3.0,     # Perceived freq > 3x fundamental
+        # Pinch harmonic thresholds (balanced for high-gain)
+        ph_centroid_ratio: float = 3.5,     # Centroid > 3.5x fundamental
+        ph_high_energy_ratio: float = 0.45, # 45%+ energy above 2kHz
+        ph_transient_threshold: float = 2.0, # HF transient > 2x average
+        ph_freq_ratio_min: float = 2.5,     # Perceived freq > 2.5x fundamental
         # Natural harmonic thresholds (much stricter for high-gain)
         nh_purity_threshold: float = 0.85,  # Single harmonic must be very dominant
         nh_sustain_threshold: float = 0.7,  # Very stable pitch required
         nh_flatness_max: float = 0.015,     # Very pure tone (stricter for distorted)
         nh_harmonic_match_required: bool = True,  # Must match known harmonic fret
         # Dive bomb thresholds
-        dive_min_drop: float = 5.0,         # Min 5 semitones drop (stricter)
+        dive_min_drop: float = 4.0,         # Min 4 semitones drop
         dive_max_time: float = 2.0,         # Max 2s for dive
-        dive_slope_threshold: float = -4.0, # Semitones per second (steeper)
-        dive_continuity_min: float = 0.6,   # Min continuity score
+        dive_slope_threshold: float = -3.0, # Semitones per second
+        dive_continuity_min: float = 0.5,   # Min continuity score
         # General
         min_note_duration: float = 0.05,    # Min 50ms note
         # High-gain mode
@@ -482,76 +482,90 @@ class PinchHarmonicDetector:
     ) -> Tuple[bool, float, Dict]:
         """
         Detect pinch harmonic (artificial harmonic / squeal).
+        Stricter detection for high-gain guitar.
         
         Characteristics:
-        - Very high spectral centroid (squealing)
+        - Very high spectral centroid (squealing sound)
         - Dominant upper harmonics (3rd-5th typically)
-        - High-frequency transient at onset
-        - Still has some harmonic structure (not noise)
+        - High-frequency transient at onset (squeal attack)
+        - Perceived frequency much higher than expected
+        - Still has harmonic structure (not noise)
         """
         scores = []
         details = {}
         
-        # 1. Spectral centroid ratio (key indicator)
+        # 1. Spectral centroid ratio (key indicator - must be very high)
         details['centroid_ratio'] = features.spectral_centroid_ratio
         if features.spectral_centroid_ratio > self.ph_centroid_ratio:
-            # Strong squeal indicator
             score = min(1.0, (features.spectral_centroid_ratio - self.ph_centroid_ratio) / 
                         self.ph_centroid_ratio)
-            scores.append(0.8 + 0.2 * score)
-        elif features.spectral_centroid_ratio > self.ph_centroid_ratio * 0.7:
-            scores.append(0.5)
+            scores.append(0.85 + 0.15 * score)
+        elif features.spectral_centroid_ratio > self.ph_centroid_ratio * 0.8:
+            scores.append(0.4)
         else:
             scores.append(0.0)
         
-        # 2. High frequency energy
+        # 2. High frequency energy (pinch harmonics are bright)
         details['hf_energy_ratio'] = features.high_freq_energy_ratio
         if features.high_freq_energy_ratio > self.ph_high_energy_ratio:
             scores.append(1.0)
-        elif features.high_freq_energy_ratio > self.ph_high_energy_ratio * 0.6:
-            scores.append(0.5)
+        elif features.high_freq_energy_ratio > self.ph_high_energy_ratio * 0.7:
+            scores.append(0.4)
         else:
             scores.append(0.0)
         
-        # 3. HF transient
+        # 3. HF transient at onset (characteristic squeal attack)
         details['has_hf_transient'] = features.has_squeal_transient
         if features.has_squeal_transient:
             scores.append(1.0)
         else:
-            scores.append(0.3)  # Not required but helps
+            scores.append(0.2)  # Helps but not required
         
-        # 4. Upper harmonic dominance (3rd or higher)
+        # 4. Upper harmonic dominance (3rd or higher - key for pinch harmonics)
         details['dominant_harmonic'] = features.harmonic_number
-        if features.harmonic_number >= 3:
-            scores.append(0.9)
+        if features.harmonic_number >= 4:
+            scores.append(1.0)
+        elif features.harmonic_number == 3:
+            scores.append(0.8)
         elif features.harmonic_number == 2:
-            scores.append(0.4)
+            scores.append(0.3)
         else:
             scores.append(0.0)
         
-        # 5. Not noise (still harmonic)
+        # 5. Still harmonic content (not pure noise)
         details['flatness'] = features.spectral_flatness
-        if features.spectral_flatness < 0.15:  # Still tonal
-            scores.append(0.8)
-        elif features.spectral_flatness < 0.25:
-            scores.append(0.4)
-        else:
-            scores.append(0.0)  # Too noisy
-        
-        # 6. Perceived frequency much higher than fundamental
-        details['freq_ratio'] = features.freq_ratio
-        if features.freq_ratio > 2.5:
+        if features.spectral_flatness < 0.12:
             scores.append(0.9)
-        elif features.freq_ratio > 1.8:
+        elif features.spectral_flatness < 0.2:
             scores.append(0.5)
         else:
-            scores.append(0.1)
+            scores.append(0.0)  # Too noisy - not a harmonic
+        
+        # 6. Perceived frequency much higher than fundamental (key indicator)
+        details['freq_ratio'] = features.freq_ratio
+        if features.freq_ratio >= self.ph_freq_ratio_min:
+            scores.append(1.0)
+        elif features.freq_ratio >= self.ph_freq_ratio_min * 0.8:
+            scores.append(0.5)
+        else:
+            scores.append(0.0)
+        
+        # 7. Sharp attack (pinch harmonics have characteristic pick attack)
+        details['attack'] = features.attack_sharpness
+        if features.attack_sharpness > 0.4:
+            scores.append(0.8)
+        elif features.attack_sharpness > 0.25:
+            scores.append(0.5)
+        else:
+            scores.append(0.2)
         
         # Calculate weighted confidence
-        weights = [0.25, 0.2, 0.15, 0.15, 0.1, 0.15]
+        weights = [0.2, 0.18, 0.12, 0.15, 0.1, 0.15, 0.1]
         confidence = sum(s * w for s, w in zip(scores, weights))
         
-        is_pinch = confidence > 0.55
+        # Higher threshold in high-gain mode
+        threshold = 0.62 if self.high_gain_mode else 0.55
+        is_pinch = confidence > threshold
         
         return is_pinch, confidence, details
     
@@ -652,43 +666,48 @@ class PinchHarmonicDetector:
         features: SquealFeatures
     ) -> Tuple[bool, float, float, Dict]:
         """
-        Detect dive bomb (whammy bar pitch drop).
+        Detect dive bomb (whammy bar pitch drop) - stricter thresholds.
         
         Characteristics:
-        - Continuous pitch descent
-        - Significant pitch drop (3+ semitones)
-        - Relatively rapid descent
+        - Continuous pitch descent (few direction changes)
+        - Significant pitch drop (5+ semitones)
+        - Steep descent rate
         """
         details = {}
         
-        # 1. Check pitch slope (must be negative / descending)
+        # 1. Check pitch slope (must be negative / descending steeply)
         details['pitch_slope'] = features.pitch_slope
         
         if features.pitch_slope > self.dive_slope_threshold:
-            # Not descending enough
+            # Not descending steeply enough
             return False, 0.0, 0.0, details
         
         # 2. Calculate total pitch drop
-        # Estimate from slope and duration
         total_drop = abs(features.pitch_slope) * features.duration
         details['total_drop'] = total_drop
         
         if total_drop < self.dive_min_drop:
             return False, 0.0, 0.0, details
         
-        # 3. Check that it's continuous descent (few direction changes)
+        # 3. Check continuity (few direction changes = smooth dive)
         details['direction_changes'] = features.pitch_direction_changes
         
-        continuity_score = 1.0 - (features.pitch_direction_changes / 10.0)
-        continuity_score = max(0.0, continuity_score)
+        # More strict continuity: should be mostly continuous descent
+        max_changes_allowed = max(2, int(features.duration * 3))  # ~3 changes per second max
+        continuity_score = 1.0 - min(1.0, features.pitch_direction_changes / max_changes_allowed)
+        details['continuity_score'] = continuity_score
+        
+        if continuity_score < self.dive_continuity_min:
+            return False, 0.0, 0.0, details
         
         # 4. Calculate confidence
-        slope_score = min(1.0, abs(features.pitch_slope) / 10.0)
+        slope_score = min(1.0, abs(features.pitch_slope) / 15.0)  # Steeper = better
         drop_score = min(1.0, total_drop / 12.0)  # Full octave = perfect score
         
-        confidence = 0.3 * slope_score + 0.4 * drop_score + 0.3 * continuity_score
+        confidence = 0.3 * slope_score + 0.35 * drop_score + 0.35 * continuity_score
         
-        is_dive = confidence > 0.5
+        # Higher threshold
+        is_dive = confidence > 0.6
         
         return is_dive, confidence, total_drop, details
     

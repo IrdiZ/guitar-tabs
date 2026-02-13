@@ -567,6 +567,14 @@ class HybridDetector(PitchDetector):
         return notes
 
 
+# Import custom YIN detector
+try:
+    from yin_pitch import YinDetector
+    HAS_YIN = True
+except ImportError:
+    HAS_YIN = False
+
+
 # Registry of available detectors
 DETECTORS = {
     'pyin': PyinDetector,
@@ -575,6 +583,10 @@ DETECTORS = {
     'autocorr': AutocorrelationDetector,
     'hybrid': HybridDetector,
 }
+
+# Add YIN if available
+if HAS_YIN:
+    DETECTORS['yin'] = YinDetector
 
 
 def get_all_detectors(sr: int = 22050) -> List[PitchDetector]:

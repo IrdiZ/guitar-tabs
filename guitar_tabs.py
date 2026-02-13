@@ -4796,6 +4796,9 @@ Examples:
         print(f"Genre Optimization: {args.genre.upper()}")
     if detect_solos and HAS_SOLO_DETECTION:
         print(f"Solo Detection: ENABLED (auto-detect solo vs rhythm)")
+    if getattr(args, 'scale_constrain', False):
+        scale_type_info = getattr(args, 'scale_constrain_type', None) or 'auto'
+        print(f"Scale Constraint: ENABLED (scale: {scale_type_info})")
     print()
     
     # Detect notes - use polyphonic or monophonic detection
@@ -4934,6 +4937,48 @@ Examples:
         print(f"  ... and {len(notes) - 20} more")
     
     # =========================================================================
+    # SCALE-CONSTRAINED DETECTION
+    # =========================================================================
+    scale_constrain_key = None
+    if HAS_SCALE_CONSTRAIN and getattr(args, 'scale_constrain', False):
+        print("\n🎯 Scale-Constrained Detection:")
+        print("-" * 40)
+        
+        # Create config from args
+        scale_config = ScaleConstraintConfig(
+            enabled=True,
+            scale_type=getattr(args, 'scale_constrain_type', None),
+            snap_direction=getattr(args, 'scale_snap_direction', 'nearest'),
+            allow_chromatic_passing=getattr(args, 'allow_passing_tones', False),
+            passing_max_duration=getattr(args, 'passing_tone_max_ms', 100) / 1000.0,
+            key_override=args.key,  # Use --key if specified
+            verbose=True
+        )
+        
+        # Apply scale constraint
+        notes, scale_constrain_key, scale_stats = apply_scale_constraint_to_detection(
+            audio_path,
+            notes,
+            config=scale_config
+        )
+        
+        print(f"   Notes processed: {scale_stats['total']}")
+        print(f"   Already in scale: {scale_stats['in_scale']}")
+        print(f"   Snapped to scale: {scale_stats['snapped']}")
+        if scale_stats['passing_tones'] > 0:
+            print(f"   Passing tones kept: {scale_stats['passing_tones']}")
+        
+        # Show note distribution after constraint
+        if notes:
+            from collections import Counter
+            note_names = [NOTE_NAMES[n.midi % 12] for n in notes]
+            dist = Counter(note_names).most_common(7)
+            print(f"   Scale notes used: {', '.join(f'{name}({count})' for name, count in dist)}")
+    elif getattr(args, 'scale_constrain', False) and not HAS_SCALE_CONSTRAIN:
+        print("\n⚠️  Scale constraint module not available.")
+        print("   Make sure scale_constrain.py is in the same directory.")
+    
+    # =========================================================================
     # DEBUG SPECTROGRAM VISUALIZATION
     # =========================================================================
     if args.debug_spectrogram:
@@ -4992,9 +5037,13 @@ Examples:
         print("\n🎵 Musical Post-Processing:")
         print("-" * 40)
         
-        # Parse user-specified key or auto-detect
+        # Parse user-specified key or use scale-constrain detected key
         user_key = None
-        if args.key:
+        if scale_constrain_key:
+            # Use key from scale constraint (already detected)
+            user_key = scale_constrain_key
+            print(f"🔑 Using key from scale constraint: {user_key.name}")
+        elif args.key:
             try:
                 user_key = parse_key_string(args.key)
                 print(f"🔑 Using specified key: {user_key.name}")

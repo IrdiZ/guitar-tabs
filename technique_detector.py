@@ -38,6 +38,11 @@ class Technique(Enum):
     VIBRATO = "~"      # Periodic pitch oscillation
     TRILL = "tr"       # Rapid alternation between two notes
     TREMOLO = "*"      # Rapid repeated notes (tremolo picking)
+    # High-gain lead guitar techniques
+    PINCH_HARMONIC = "PH"    # Artificial harmonic (squeal)
+    NATURAL_HARMONIC = "NH"  # Natural harmonic at fret position
+    DIVE_BOMB = "dive"       # Whammy bar pitch drop
+    WHAMMY_FLUTTER = "flutter"  # Rapid pitch oscillation with whammy
     TAP = "t"          # Two-hand tapping (right hand taps fretboard)
 
 

@@ -1,0 +1,551 @@
+[
+  {
+    "time": 0.06965986394557823,
+    "duration": 0.16253968253968254,
+    "pitch": 97.99885899543733,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 0.23219954648526078,
+    "duration": 0.18575963718820862,
+    "pitch": 97.99885899543733,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 0.4179591836734694,
+    "duration": 0.18575963718820865,
+    "pitch": 101.45478129445333,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 0.603718820861678,
+    "duration": 0.16253968253968254,
+    "pitch": 98.56656061031478,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 0.7662585034013606,
+    "duration": 0.5,
+    "pitch": 99.13755088719134,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 1.509297052154195,
+    "duration": 0.4876190476190476,
+    "pitch": 111.2781384332115,
+    "technique": "flutter",
+    "confidence": 0.6,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 1.9969160997732427,
+    "duration": 0.16253968253968232,
+    "pitch": 148.53849407850092,
+    "technique": "NH",
+    "confidence": 0.780871650690047,
+    "harmonic_fret": 12,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 2.159455782312925,
+    "duration": 0.2321995464852611,
+    "pitch": 133.0993498141222,
+    "technique": "",
+    "confidence": 0.47155040084676847,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 2.391655328798186,
+    "duration": 0.16253968253968232,
+    "pitch": 111.2781384332115,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 2.5541950113378684,
+    "duration": 0.16253968253968276,
+    "pitch": 132.33275396903284,
+    "technique": "",
+    "confidence": 0.39294680910359714,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 2.716734693877551,
+    "duration": 0.3482993197278912,
+    "pitch": 154.66751207845846,
+    "technique": "",
+    "confidence": 0.6659999999999999,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 3.0650340136054424,
+    "duration": 0.18575963718820843,
+    "pitch": 111.92276613129552,
+    "technique": "",
+    "confidence": 0.836,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 3.250793650793651,
+    "duration": 0.16253968253968276,
+    "pitch": 97.43442710125967,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 3.4133333333333336,
+    "duration": 0.16253968253968232,
+    "pitch": 111.92276613129552,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 3.575873015873016,
+    "duration": 0.05,
+    "pitch": 82.4068892282175,
+    "technique": "",
+    "confidence": 0.821,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 3.622312925170068,
+    "duration": 0.5,
+    "pitch": 99.71184887709217,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 4.365351473922902,
+    "duration": 0.18575963718820887,
+    "pitch": 111.2781384332115,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 4.829750566893424,
+    "duration": 0.16253968253968232,
+    "pitch": 148.53849407850092,
+    "technique": "NH",
+    "confidence": 0.7817681505168589,
+    "harmonic_fret": 7,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 4.992290249433107,
+    "duration": 0.20897959183673454,
+    "pitch": 133.87038650376502,
+    "technique": "",
+    "confidence": 0.47248220197144464,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 5.201269841269841,
+    "duration": 0.16253968253968232,
+    "pitch": 111.92276613129552,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 5.363809523809524,
+    "duration": 0.1625396825396832,
+    "pitch": 132.33275396903284,
+    "technique": "",
+    "confidence": 0.47061320185308986,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 5.526349206349207,
+    "duration": 0.18575963718820798,
+    "pitch": 156.464662001701,
+    "technique": "NH",
+    "confidence": 0.6938939991801099,
+    "harmonic_fret": 12,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 5.712108843537415,
+    "duration": 0.25541950113378675,
+    "pitch": 151.13490122038982,
+    "technique": "flutter",
+    "confidence": 0.7,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 5.9675283446712015,
+    "duration": 0.09287981859410444,
+    "pitch": 111.2781384332115,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 6.060408163265306,
+    "duration": 0.2321995464852611,
+    "pitch": 105.03257643014584,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 6.292607709750567,
+    "duration": 0.4643990929705213,
+    "pitch": 82.4068892282175,
+    "technique": "flutter",
+    "confidence": 1.0,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 6.757006802721088,
+    "duration": 0.3482993197278912,
+    "pitch": 111.2781384332115,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 7.1053061224489795,
+    "duration": 0.3482993197278912,
+    "pitch": 111.2781384332115,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 7.453605442176871,
+    "duration": 0.37151927437641685,
+    "pitch": 108.73654223881859,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 9.58984126984127,
+    "duration": 0.3482993197278912,
+    "pitch": 110.63722351746388,
+    "technique": "flutter",
+    "confidence": 0.6,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 10.286439909297052,
+    "duration": 0.37151927437641774,
+    "pitch": 110.63722351746388,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 10.65795918367347,
+    "duration": 0.16253968253968232,
+    "pitch": 111.2781384332115,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 10.820498866213152,
+    "duration": 0.18575963718820887,
+    "pitch": 133.0993498141222,
+    "technique": "",
+    "confidence": 0.6659999999999999,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 11.00625850340136,
+    "duration": 0.32507936507936463,
+    "pitch": 110.00000000000001,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 11.331337868480725,
+    "duration": 0.20897959183673542,
+    "pitch": 102.04250286354406,
+    "technique": "flutter",
+    "confidence": 0.7,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 11.54031746031746,
+    "duration": 0.16253968253968232,
+    "pitch": 111.2781384332115,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 11.702857142857143,
+    "duration": 0.5,
+    "pitch": 110.63722351746388,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 12.747755102040816,
+    "duration": 0.20897959183673542,
+    "pitch": 82.4068892282175,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 12.956734693877552,
+    "duration": 0.13931972789115576,
+    "pitch": 113.22324603078414,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 13.281814058956916,
+    "duration": 0.18575963718820887,
+    "pitch": 110.00000000000001,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 13.467573696145125,
+    "duration": 0.3482993197278912,
+    "pitch": 82.88426748110169,
+    "technique": "flutter",
+    "confidence": 0.8,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 13.815873015873017,
+    "duration": 0.1857596371882071,
+    "pitch": 113.22324603078414,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 14.001632653061224,
+    "duration": 0.18575963718820887,
+    "pitch": 110.00000000000001,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 15.580589569160997,
+    "duration": 0.3482993197278912,
+    "pitch": 108.73654223881859,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 16.300408163265306,
+    "duration": 0.3482993197278894,
+    "pitch": 82.4068892282175,
+    "technique": "",
+    "confidence": 0.719,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 16.648707482993196,
+    "duration": 0.37151927437641774,
+    "pitch": 111.92276613129552,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 17.020226757369613,
+    "duration": 0.1625396825396841,
+    "pitch": 110.63722351746388,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 17.182766439909297,
+    "duration": 0.18575963718820887,
+    "pitch": 119.26495573315604,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 17.368526077097506,
+    "duration": 0.3482993197278894,
+    "pitch": 83.84733627906691,
+    "technique": "flutter",
+    "confidence": 1.0,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 17.716825396825396,
+    "duration": 0.34829931972789296,
+    "pitch": 110.63722351746388,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 18.06512471655329,
+    "duration": 0.20897959183673365,
+    "pitch": 82.88426748110169,
+    "technique": "NH",
+    "confidence": 0.7817464923111052,
+    "harmonic_fret": 12,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 18.274104308390022,
+    "duration": 0.1625396825396841,
+    "pitch": 110.00000000000001,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 18.436643990929706,
+    "duration": 0.32507936507936463,
+    "pitch": 87.30705785825099,
+    "technique": "flutter",
+    "confidence": 0.6,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 18.76172335600907,
+    "duration": 0.20897959183673365,
+    "pitch": 111.92276613129552,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 18.970702947845805,
+    "duration": 0.1625396825396841,
+    "pitch": 108.73654223881859,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 19.13324263038549,
+    "duration": 0.18575963718820887,
+    "pitch": 109.36644661993022,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 19.82984126984127,
+    "duration": 0.13931972789115576,
+    "pitch": 109.36644661993022,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 19.969160997732427,
+    "duration": 0.18575963718820887,
+    "pitch": 110.63722351746388,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 20.154920634920636,
+    "duration": 0.18575963718820887,
+    "pitch": 105.03257643014584,
+    "technique": "",
+    "confidence": 0.866,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 20.340680272108845,
+    "duration": 0.18575963718820887,
+    "pitch": 111.2781384332115,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  },
+  {
+    "time": 20.526439909297054,
+    "duration": 0.3,
+    "pitch": 105.03257643014584,
+    "technique": "",
+    "confidence": 0.794,
+    "harmonic_fret": null,
+    "dive_semitones": 0.0
+  }
+]

@@ -123,6 +123,7 @@ class EnsembleConfig:
     use_essentia_yin: bool = False      # Essentia YIN - slower but thorough
     use_praat_cc: bool = True           # Praat cross-correlation - HIGH CONFIDENCE
     use_praat_shs: bool = True          # Praat SHS - good for harmonics
+    use_yin: bool = True                # Custom YIN - BEST FOR MONOPHONIC, handles octave errors
     
     # Detector weights (higher = more trusted)
     weights: Dict[str, float] = field(default_factory=lambda: {
@@ -136,6 +137,7 @@ class EnsembleConfig:
         'essentia_yin': 1.1,      # Thorough YIN implementation
         'praat_cc': 1.2,          # High confidence scores
         'praat_shs': 1.1,         # Good for harmonics
+        'yin': 1.4,               # Custom YIN - excellent for lead guitar, handles octave errors
     })
     
     # Consensus parameters
@@ -212,6 +214,12 @@ class EnsemblePitchDetector:
                 methods.append('praat_shs')
         elif self.config.use_praat_cc or self.config.use_praat_shs:
             print("⚠️  Parselmouth not available (install: pip install praat-parselmouth)")
+        
+        # Custom YIN detector (always available - pure numpy)
+        if self.config.use_yin and HAS_YIN:
+            methods.append('yin')
+        elif self.config.use_yin and not HAS_YIN:
+            print("⚠️  Custom YIN not available (check yin_pitch.py)")
         
         return methods
     
@@ -292,6 +300,8 @@ class EnsemblePitchDetector:
             return self._detect_praat_cc(y)
         elif method == 'praat_shs':
             return self._detect_praat_shs(y)
+        elif method == 'yin':
+            return self._detect_yin(y)
         else:
             raise ValueError(f"Unknown method: {method}")
     
@@ -864,6 +874,57 @@ class EnsemblePitchDetector:
                         method='praat_shs',
                         raw_pitch=float(freq)
                     ))
+        
+        return candidates
+    
+    def _detect_yin(self, y: np.ndarray) -> List[PitchCandidate]:
+        """
+        Detect pitches using our custom YIN implementation.
+        
+        YIN (de Cheveigné & Kawahara, 2002) is specifically designed for
+        monophonic pitch detection with these key features:
+        
+        1. Cumulative Mean Normalized Difference Function (CMNDF)
+           - Prevents false peaks at low lags that cause basic autocorrelation
+             to fail
+        
+        2. Absolute threshold for aperiodicity detection
+           - Only reports pitches when the signal is clearly periodic
+        
+        3. Parabolic interpolation
+           - Achieves sub-sample accuracy for precise pitch estimation
+        
+        4. Octave error handling
+           - Explicitly checks for and corrects common octave errors
+           
+        This is EXCELLENT for lead guitar where we want:
+        - Clean monophonic note detection
+        - Resistance to harmonic confusion
+        - High confidence values
+        """
+        if not HAS_YIN:
+            return []
+        
+        # Use our YIN implementation
+        yin_results = detect_yin_for_ensemble(
+            y, 
+            self.sr, 
+            hop_length=self.config.hop_length,
+            fmin=GUITAR_MIN_HZ,
+            fmax=GUITAR_MAX_HZ
+        )
+        
+        # Convert to PitchCandidates
+        candidates = []
+        for r in yin_results:
+            candidates.append(PitchCandidate(
+                time=r['time'],
+                midi_note=r['midi_note'],
+                frequency=r['frequency'],
+                confidence=r['confidence'],
+                method='yin',
+                raw_pitch=r['raw_pitch']
+            ))
         
         return candidates
     
