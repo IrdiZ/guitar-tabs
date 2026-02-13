@@ -55,6 +55,13 @@ try:
 except ImportError:
     HAS_GUITARPRO = False
 
+# CREPE pitch detection (deep learning model for monophonic pitch)
+try:
+    import crepe
+    HAS_CREPE = True
+except ImportError:
+    HAS_CREPE = False
+
 # Music theory module for post-processing
 try:
     from music_theory import (
@@ -910,6 +917,81 @@ def detect_pitch_piptrack(y: np.ndarray, sr: int, hop_length: int = 512) -> Tupl
         fmax=GUITAR_MAX_HZ
     )
     return pitches, magnitudes
+
+
+def detect_pitch_crepe(
+    y: np.ndarray,
+    sr: int,
+    hop_length: int = 512,
+    model_capacity: str = 'full',
+    viterbi: bool = True
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Detect pitch using CREPE (Convolutional Representation for Pitch Estimation).
+    
+    CREPE is a deep learning model specifically trained for monophonic pitch detection.
+    It is more accurate than traditional DSP methods like pYIN, especially for:
+    - Noisy audio
+    - Guitar recordings with string squeaks
+    - Fast passages
+    - Expressive playing with vibrato/bends
+    
+    Args:
+        y: Audio signal (will be resampled to 16kHz internally)
+        sr: Sample rate of input audio
+        hop_length: Hop length for output alignment (CREPE uses step_size in ms)
+        model_capacity: 'tiny', 'small', 'medium', 'large', or 'full'
+                       Larger models are more accurate but slower.
+        viterbi: Apply Viterbi smoothing to pitch curve (recommended)
+    
+    Returns:
+        f0: Pitch values in Hz (0 for unvoiced frames)
+        voiced_flag: Boolean array of voiced frame indicators
+        confidence: Confidence values (0-1)
+    
+    Requires:
+        pip install crepe tensorflow
+    """
+    if not HAS_CREPE:
+        raise RuntimeError(
+            "CREPE not available. Install with: pip install crepe tensorflow\n"
+            "Or use --pitch-method pyin instead."
+        )
+    
+    # Convert hop_length to step_size in milliseconds
+    # CREPE default step_size is 10ms
+    step_size_ms = int((hop_length / sr) * 1000)
+    step_size_ms = max(10, step_size_ms)  # Minimum 10ms
+    
+    print(f"  CREPE: Using {model_capacity} model, step_size={step_size_ms}ms, viterbi={viterbi}")
+    
+    # Run CREPE prediction
+    time, frequency, confidence, activation = crepe.predict(
+        y,
+        sr,
+        model_capacity=model_capacity,
+        viterbi=viterbi,
+        step_size=step_size_ms,
+        verbose=0
+    )
+    
+    # Create voiced flag based on confidence threshold
+    # CREPE confidence is voice activity probability
+    voiced_threshold = 0.5
+    voiced_flag = confidence >= voiced_threshold
+    
+    # Zero out unvoiced frames (consistent with pyin behavior)
+    f0 = np.where(voiced_flag, frequency, 0.0)
+    
+    # Filter to guitar range
+    f0 = np.where((f0 >= GUITAR_MIN_HZ) & (f0 <= GUITAR_MAX_HZ), f0, 0.0)
+    
+    # Update voiced flag based on filtered f0
+    voiced_flag = f0 > 0
+    
+    print(f"  CREPE: Detected {np.sum(voiced_flag)} voiced frames out of {len(f0)}")
+    
+    return f0, voiced_flag, confidence
 
 
 def detect_pitch_cqt(
