@@ -169,6 +169,19 @@ try:
 except ImportError:
     HAS_MUSIC_THEORY = False
 
+# Scale-constrained pitch detection (enforces musical coherence)
+try:
+    from scale_constrain import (
+        ScaleConstrainer,
+        ScaleConstraintConfig,
+        apply_scale_constraint_to_detection,
+        add_scale_constrain_args,
+        config_from_args as scale_config_from_args
+    )
+    HAS_SCALE_CONSTRAIN = True
+except ImportError:
+    HAS_SCALE_CONSTRAIN = False
+
 # Fingering optimizer module
 try:
     from fingering_optimizer import (
@@ -4602,6 +4615,24 @@ Examples:
                         help='Disable pitch snapping to scale')
     parser.add_argument('--no-playability-filter', action='store_true',
                         help='Disable physical playability filtering')
+    
+    # Scale-constrained detection arguments
+    parser.add_argument('--scale-constrain', action='store_true',
+                        help='Enable scale-constrained detection: auto-detect key and snap ALL '
+                             'detected pitches to the nearest valid scale note. This eliminates '
+                             'random wrong notes that are not in the key. More aggressive than --no-snap.')
+    parser.add_argument('--scale-constrain-type', type=str, default=None,
+                        choices=['major', 'natural_minor', 'harmonic_minor', 'melodic_minor',
+                                 'pentatonic_major', 'pentatonic_minor', 'blues',
+                                 'dorian', 'phrygian', 'lydian', 'mixolydian'],
+                        help='Scale type for constraint (default: auto from detected key mode)')
+    parser.add_argument('--scale-snap-direction', type=str, default='nearest',
+                        choices=['nearest', 'down', 'up'],
+                        help='Direction to snap out-of-scale notes (default: nearest)')
+    parser.add_argument('--allow-passing-tones', action='store_true',
+                        help='Allow short chromatic passing tones (notes < 100ms) when using --scale-constrain')
+    parser.add_argument('--passing-tone-max-ms', type=float, default=100,
+                        help='Maximum duration (ms) for passing tones (default: 100)')
     parser.add_argument('--detect-patterns', action='store_true',
                         help='Detect repeated patterns/riffs in the transcription')
     parser.add_argument('--swing', type=float, default=0.0,
@@ -4804,6 +4835,73 @@ Examples:
     if not notes:
         print("No notes detected! Try lowering confidence threshold with -c 0.1")
         sys.exit(1)
+    
+    # =========================================================================
+    # FAST LEGATO RUN DETECTION
+    # =========================================================================
+    legato_runs = []
+    if HAS_FAST_LEGATO and args.fast_legato:
+        print("\n🎸 Fast Legato Run Detection:")
+        print("-" * 40)
+        
+        # Load audio for legato detection
+        y_legato, sr_legato = librosa.load(audio_path, sr=22050, mono=True)
+        
+        # Create detector
+        enable_scale_matching = not getattr(args, 'no_legato_scale_match', False)
+        
+        detector = FastLegatoDetector(
+            sr=sr_legato,
+            hop_length=256,  # Small hop for fast passages
+            min_note_duration_ms=getattr(args, 'legato_min_duration', 30.0),
+            fast_run_threshold_ms=getattr(args, 'legato_threshold', 125.0),
+            min_run_notes=getattr(args, 'legato_min_notes', 4),
+            enable_scale_matching=enable_scale_matching,
+        )
+        
+        # Detect legato runs
+        legato_notes, legato_runs = detector.detect(y_legato, existing_notes=notes, verbose=True)
+        
+        # Convert legato notes to Note objects and merge
+        if legato_notes:
+            new_notes = []
+            for ln in legato_notes:
+                new_note = Note(
+                    midi=ln.midi,
+                    start_time=ln.start_time,
+                    duration=ln.end_time - ln.start_time,
+                    confidence=ln.confidence * 0.9  # Slightly lower weight for legato
+                )
+                new_notes.append(new_note)
+            
+            # Merge with existing notes, avoiding duplicates
+            existing_times = {(round(n.start_time, 3), n.midi) for n in notes}
+            for nn in new_notes:
+                key = (round(nn.start_time, 3), nn.midi)
+                # Check for nearby duplicates (within 50ms)
+                is_dup = any(
+                    abs(nn.start_time - t) < 0.05 and nn.midi == m 
+                    for t, m in existing_times
+                )
+                if not is_dup:
+                    notes.append(nn)
+            
+            # Re-sort by time
+            notes.sort(key=lambda n: n.start_time)
+            
+            print(f"   Added {len(new_notes)} additional legato notes")
+            print(f"   Total notes after legato detection: {len(notes)}")
+            
+            # Print run summary
+            if legato_runs:
+                print(f"\n   🎵 Legato Runs Detected:")
+                for i, run in enumerate(legato_runs[:5]):  # Show first 5
+                    scale_info = f" ({run.scale_type})" if run.scale_type else ""
+                    nps_info = " [3nps]" if run.is_3nps else ""
+                    print(f"      {i+1}. {run.num_notes} notes, {run.direction}{scale_info}{nps_info}, "
+                          f"{run.notes_per_second:.1f} nps @ {run.start_time:.2f}s")
+                if len(legato_runs) > 5:
+                    print(f"      ... and {len(legato_runs) - 5} more runs")
     
     # =========================================================================
     # GENRE-SPECIFIC OPTIMIZATION

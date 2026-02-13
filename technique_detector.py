@@ -735,6 +735,151 @@ class TechniqueDetector:
             
             i = max(j, i + 1)
     
+    def _detect_tapping(
+        self,
+        notes: List[AnnotatedNote],
+        y: np.ndarray,
+        onset_details: Optional[List[Any]] = None
+    ) -> None:
+        """
+        Detect two-hand tapping technique.
+        
+        Two-hand tapping characteristics:
+        1. Wide interval jumps (>7 frets) with legato attack
+        2. Tapped notes typically on high frets (12+)
+        3. Often followed by pull-offs
+        4. Low attack strength (no pick)
+        
+        Notation: t12-p5-h7 (tap at 12, pull-off to 5, hammer-on to 7)
+        """
+        if len(notes) < 2:
+            return
+        
+        # Minimum interval for tap detection (semitones/frets)
+        MIN_TAP_INTERVAL = 7
+        MIN_TAP_FRET = 10  # Taps usually happen on higher frets
+        
+        # Compute attack strengths
+        attack_strengths = self._compute_tap_attack_strengths(y, notes)
+        
+        # Build onset lookup
+        onset_map = {}
+        if onset_details:
+            for onset in onset_details:
+                onset_map[round(onset.time * 1000)] = onset
+        
+        # Track notes that are part of tapping sequences
+        tap_sequence_notes = set()
+        
+        for i in range(len(notes) - 1):
+            note = notes[i]
+            next_note = notes[i + 1]
+            
+            # Skip if already has a technique (except none)
+            if note.technique.technique not in (Technique.NONE, Technique.HAMMER_ON, Technique.PULL_OFF):
+                continue
+            
+            # Calculate interval to next note
+            interval = abs(next_note.midi - note.midi)
+            
+            # Check for tap characteristics
+            is_tap = False
+            
+            # Case 1: High note with wide jump down to next note (tapped note)
+            if (note.fret >= MIN_TAP_FRET and 
+                interval >= MIN_TAP_INTERVAL and
+                note.midi > next_note.midi):  # Descending
+                
+                # Check attack strength (taps have soft attack)
+                attack = attack_strengths.get(i, 0.5)
+                
+                # Check for legato onset
+                is_legato = note.is_legato
+                onset_key = round(note.start_time * 1000)
+                for key in range(onset_key - 50, onset_key + 51):
+                    if key in onset_map:
+                        onset = onset_map[key]
+                        if hasattr(onset, 'is_legato') and onset.is_legato:
+                            is_legato = True
+                        break
+                
+                # Confirm tap: high fret + wide interval + (soft attack OR legato)
+                if attack < 0.5 or is_legato:
+                    is_tap = True
+            
+            # Case 2: Previous note was low, current is very high (>7 fret jump up)
+            if i > 0:
+                prev_note = notes[i - 1]
+                interval_from_prev = abs(note.midi - prev_note.midi)
+                
+                if (note.fret >= MIN_TAP_FRET and 
+                    interval_from_prev >= MIN_TAP_INTERVAL and
+                    note.midi > prev_note.midi):  # Ascending to tap
+                    
+                    attack = attack_strengths.get(i, 0.5)
+                    if attack < 0.5 or note.is_legato:
+                        is_tap = True
+            
+            if is_tap:
+                # Mark as tap with pull-off target
+                note.technique = TechniqueAnnotation(
+                    technique=Technique.TAP,
+                    target_fret=next_note.fret,  # Pull-off destination
+                    confidence=0.8 if note.is_legato else 0.6
+                )
+                tap_sequence_notes.add(i)
+                
+                # The following note is likely a pull-off (already detected)
+                # But mark it as part of tap sequence
+                tap_sequence_notes.add(i + 1)
+    
+    def _compute_tap_attack_strengths(
+        self,
+        y: np.ndarray,
+        notes: List[AnnotatedNote]
+    ) -> Dict[int, float]:
+        """Compute attack strength for tapping detection."""
+        from scipy.signal import butter, filtfilt
+        
+        attack_strengths = {}
+        
+        # High-pass filter for transient detection
+        nyq = self.sr / 2
+        high_cutoff = min(2000 / nyq, 0.95)
+        
+        try:
+            b, a = butter(4, high_cutoff, btype='high')
+            y_hp = filtfilt(b, a, y)
+        except Exception:
+            y_hp = y
+        
+        for i, note in enumerate(notes):
+            start_sample = int(note.start_time * self.sr)
+            attack_window = int(0.02 * self.sr)  # 20ms attack window
+            end_sample = min(start_sample + attack_window, len(y_hp))
+            
+            if start_sample >= len(y_hp):
+                attack_strengths[i] = 0.5
+                continue
+            
+            segment = y_hp[start_sample:end_sample]
+            if len(segment) == 0:
+                attack_strengths[i] = 0.5
+                continue
+            
+            # Attack strength based on HF transient peak
+            peak = np.max(np.abs(segment))
+            attack_strengths[i] = min(1.0, peak * 10)
+        
+        # Normalize
+        if attack_strengths:
+            max_str = max(attack_strengths.values())
+            if max_str > 0:
+                for i in attack_strengths:
+                    attack_strengths[i] /= max_str
+        
+        return attack_strengths
+    
     def _print_stats(self, notes: List[AnnotatedNote]) -> None:
         """Print detection statistics."""
         stats = {
@@ -747,6 +892,7 @@ class TechniqueDetector:
             'vibrato': 0,
             'trill': 0,
             'tremolo': 0,
+            'tap': 0,
             'none': 0
         }
         
@@ -768,6 +914,8 @@ class TechniqueDetector:
                 stats['trill'] += 1
             elif tech == Technique.TREMOLO:
                 stats['tremolo'] += 1
+            elif tech == Technique.TAP:
+                stats['tap'] += 1
             else:
                 stats['none'] += 1
         
@@ -781,6 +929,7 @@ class TechniqueDetector:
         print(f"    Vibrato (~): {stats['vibrato']}")
         print(f"    Trills (tr): {stats['trill']}")
         print(f"    Tremolo (*): {stats['tremolo']}")
+        print(f"    Taps (t): {stats['tap']}")
         print(f"    Plain notes: {stats['none']}")
 
 
