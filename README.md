@@ -52,6 +52,56 @@ This can improve fret assignment accuracy by 20-40% compared to heuristic method
 
 ---
 
+## Lead Guitar Technique Detection
+
+Detects advanced techniques used in distorted/high-gain lead guitar:
+
+### Supported Techniques
+
+| Technique | Notation | Description |
+|-----------|----------|-------------|
+| **Pinch Harmonic** | `7(PH)` | Artificial harmonic (squeal) - thumb touches string while picking |
+| **Natural Harmonic** | `<12>` | Harmonic at fret position (5, 7, 12, etc.) |
+| **Dive Bomb** | `7~dive` | Whammy bar pitch drop |
+| **Whammy Flutter** | `5~flutter` | Rapid pitch oscillation with whammy bar |
+| **Vibrato** | `5~` | Finger vibrato |
+| **Bend** | `7b9` | Bend from fret 7 to pitch of fret 9 |
+| **Hammer-on/Pull-off** | `5h7`, `7p5` | Legato techniques |
+| **Slides** | `5/7`, `7\5` | Slide up/down |
+
+### Usage
+
+```bash
+# Detect pinch harmonics and squeals
+python pinch_harmonic_detector.py audio.mp3 -v
+
+# Output to JSON
+python pinch_harmonic_detector.py audio.mp3 -o techniques.json
+
+# With custom sample rate
+python pinch_harmonic_detector.py audio.mp3 --sr 44100
+```
+
+### Detection Details
+
+**Pinch Harmonics (PH)**:
+- Very high spectral centroid (squealing sound)
+- Dominant upper harmonics (3rd-5th)
+- High-frequency transient at onset
+- Characteristic pick attack
+
+**Natural Harmonics (NH)**:
+- Very pure tone (single dominant harmonic)
+- Matches specific fret positions (5, 7, 12)
+- Long sustain, clean decay
+
+**Dive Bombs**:
+- Continuous pitch descent
+- Minimum 4 semitones drop
+- Smooth trajectory (few direction changes)
+
+---
+
 ## Accuracy Testing
 
 Ground truth testing validates detection accuracy using synthetic audio with known notes.

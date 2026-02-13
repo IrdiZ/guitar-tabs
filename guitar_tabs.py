@@ -283,6 +283,22 @@ try:
 except ImportError:
     HAS_FAST_LEGATO = False
 
+# Fretboard position tracking (physical constraints for accuracy)
+try:
+    from fretboard_position import (
+        PositionTracker,
+        PositionTrackerConfig,
+        Position,
+        PositionType,
+        create_position_tracker,
+        apply_position_constraints,
+        add_position_tracking_args,
+        config_from_args as position_config_from_args
+    )
+    HAS_POSITION_TRACKING = True
+except ImportError:
+    HAS_POSITION_TRACKING = False
+
 # Basic Pitch support via Docker
 import json
 import shutil

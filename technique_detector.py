@@ -101,6 +101,20 @@ class TechniqueAnnotation:
                 return f"t{source_fret}-p{self.target_fret}"
             return f"t{source_fret}"
         
+        # High-gain lead guitar techniques
+        if self.technique == Technique.PINCH_HARMONIC:
+            return f"{source_fret}(PH)"
+        
+        if self.technique == Technique.NATURAL_HARMONIC:
+            fret = self.target_fret if self.target_fret else source_fret
+            return f"<{fret}>"
+        
+        if self.technique == Technique.DIVE_BOMB:
+            return f"{source_fret}~dive"
+        
+        if self.technique == Technique.WHAMMY_FLUTTER:
+            return f"{source_fret}~flutter"
+        
         return str(source_fret)
 
 
@@ -898,6 +912,10 @@ class TechniqueDetector:
             'trill': 0,
             'tremolo': 0,
             'tap': 0,
+            'pinch_harmonic': 0,
+            'natural_harmonic': 0,
+            'dive_bomb': 0,
+            'whammy_flutter': 0,
             'none': 0
         }
         
@@ -921,6 +939,14 @@ class TechniqueDetector:
                 stats['tremolo'] += 1
             elif tech == Technique.TAP:
                 stats['tap'] += 1
+            elif tech == Technique.PINCH_HARMONIC:
+                stats['pinch_harmonic'] += 1
+            elif tech == Technique.NATURAL_HARMONIC:
+                stats['natural_harmonic'] += 1
+            elif tech == Technique.DIVE_BOMB:
+                stats['dive_bomb'] += 1
+            elif tech == Technique.WHAMMY_FLUTTER:
+                stats['whammy_flutter'] += 1
             else:
                 stats['none'] += 1
         
@@ -935,6 +961,10 @@ class TechniqueDetector:
         print(f"    Trills (tr): {stats['trill']}")
         print(f"    Tremolo (*): {stats['tremolo']}")
         print(f"    Taps (t): {stats['tap']}")
+        print(f"    Pinch harmonics (PH): {stats['pinch_harmonic']}")
+        print(f"    Natural harmonics (NH): {stats['natural_harmonic']}")
+        print(f"    Dive bombs: {stats['dive_bomb']}")
+        print(f"    Whammy flutter: {stats['whammy_flutter']}")
         print(f"    Plain notes: {stats['none']}")
 
 
