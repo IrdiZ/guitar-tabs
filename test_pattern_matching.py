@@ -55,7 +55,7 @@ def detect_notes_simple(audio_path: str) -> list:
     try:
         from ensemble_pitch import detect_notes_ensemble
         print("Using ensemble pitch detection...")
-        result = detect_notes_ensemble(y, sr)
+        result = detect_notes_ensemble(audio_path, sr)  # Pass path, not array
         for note in result.notes:
             notes.append(DetectedNote(
                 midi=note.midi,
@@ -65,8 +65,8 @@ def detect_notes_simple(audio_path: str) -> list:
             ))
         print(f"Ensemble detected {len(notes)} notes")
         return notes
-    except ImportError:
-        pass
+    except (ImportError, Exception) as e:
+        print(f"Ensemble detection failed: {e}")
     
     # Fallback to pyin
     try:

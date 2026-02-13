@@ -169,6 +169,22 @@ try:
 except ImportError:
     HAS_MUSIC_THEORY = False
 
+# Pattern matching for reliable transcription (licks, runs, arpeggios)
+try:
+    from pattern_integration import (
+        enhance_transcription,
+        apply_pattern_enhancement_to_notes,
+        add_pattern_args,
+        PatternEnhancedTranscription,
+    )
+    from pattern_library import (
+        PatternMatcher, PatternType, PATTERN_LIBRARY,
+        match_patterns, correct_with_patterns
+    )
+    HAS_PATTERN_MATCHING = True
+except ImportError:
+    HAS_PATTERN_MATCHING = False
+
 # Scale-constrained pitch detection (enforces musical coherence)
 try:
     from scale_constrain import (
@@ -3349,6 +3365,103 @@ def notes_to_tabs_spectral(
     return tab_notes
 
 
+def notes_to_tabs_position(
+    notes: List[Note],
+    tuning: List[int] = None,
+    config: 'PositionTrackerConfig' = None,
+    verbose: bool = False
+) -> List[TabNote]:
+    """
+    Convert notes to tab positions using fretboard position tracking.
+    
+    This method tracks hand position on the fretboard and applies physical
+    constraints to improve accuracy. Key features:
+    
+    1. Infers initial position from first few notes
+    2. Tracks position changes over time
+    3. Penalizes impossible/impractical fret jumps
+    4. Supports pentatonic boxes, CAGED positions, 3-note-per-string patterns
+    5. Smooths position changes (can't jump 10 frets instantly)
+    
+    Args:
+        notes: List of Note objects with midi, start_time, duration
+        tuning: Guitar tuning as MIDI notes
+        config: Position tracking configuration
+        verbose: Print position analysis
+        
+    Returns:
+        List of TabNote objects with position-optimized fret choices
+    """
+    if tuning is None:
+        tuning = TUNINGS['standard']
+    
+    if not HAS_POSITION_TRACKING:
+        print("⚠️  Position tracking module not available, using basic heuristics")
+        return notes_to_tabs(notes, tuning)
+    
+    if not notes:
+        return []
+    
+    # Create position tracker
+    tracker_config = config or PositionTrackerConfig(verbose=verbose)
+    tracker = PositionTracker(tuning=tuning, config=tracker_config)
+    
+    # Sort notes by time
+    sorted_notes = sorted(notes, key=lambda n: n.start_time)
+    
+    # Infer initial position from first few notes
+    tracker.infer_initial_position(sorted_notes[:8])
+    
+    # Process each note
+    tab_notes = []
+    prev_time = None
+    prev_string = None
+    prev_fret = None
+    
+    for note in sorted_notes:
+        result = tracker.choose_best_fret(
+            note.midi, note.start_time,
+            prev_time, prev_string, prev_fret
+        )
+        
+        if result is None:
+            # Note out of guitar range - skip
+            continue
+        
+        string, fret = result
+        tab_notes.append(TabNote(
+            string=string,
+            fret=fret,
+            start_time=note.start_time,
+            duration=note.duration
+        ))
+        
+        prev_time = note.start_time
+        prev_string = string
+        prev_fret = fret
+    
+    # Post-process: smooth positions
+    tab_notes = tracker.smooth_positions(tab_notes)
+    
+    # Print analysis
+    if verbose:
+        stats = tracker.analyze_positions(tab_notes)
+        print(f"\n📍 Position Tracking Analysis:")
+        print(f"   Total notes: {stats.get('total_notes', 0)}")
+        print(f"   Primary position: fret {stats.get('primary_position', '?')}")
+        print(f"   Position changes: {stats.get('position_changes', 0)}")
+        print(f"   Avg fret: {stats.get('avg_fret', 0):.1f}")
+        print(f"   Fret range: {stats.get('min_fret', 0)} - {stats.get('max_fret', 0)}")
+        print(f"   Avg fret jump: {stats.get('avg_fret_jump', 0):.1f}")
+        print(f"   Max fret jump: {stats.get('max_fret_jump', 0)}")
+        print(f"   Open strings: {stats.get('open_strings', 0)}")
+        
+        if tracker.transitions:
+            print(f"   Position shifts recorded: {len(tracker.transitions)}")
+    
+    return tab_notes
+
+
 # ============================================================================
 # CHORD DETECTION
 # ============================================================================
@@ -4741,6 +4854,20 @@ Examples:
     parser.add_argument('--no-legato-scale-match', action='store_true',
                         help='Disable scale pattern matching for legato runs')
     
+    # Position tracking options
+    parser.add_argument('--position-tracking', action='store_true',
+                        help='Enable fretboard position tracking. Tracks hand position '
+                             'and applies physical constraints (can\'t jump 10 frets instantly) '
+                             'to improve tab accuracy.')
+    parser.add_argument('--position-verbose', action='store_true',
+                        help='Print detailed position tracking info')
+    parser.add_argument('--position-low-fret-bonus', type=float, default=0.5,
+                        help='Bonus for lower fret positions (default: 0.5)')
+    parser.add_argument('--position-shift-cost', type=float, default=2.0,
+                        help='Cost per fret of position shift (default: 2.0)')
+    parser.add_argument('--position-max-instant', type=int, default=4,
+                        help='Max frets that can shift instantly without penalty (default: 4)')
+    
     args = parser.parse_args()
     
     # Parse tuning
@@ -5099,6 +5226,39 @@ Examples:
             print("⚠️  Music theory module not available. Skipping post-processing.")
             print("   Make sure music_theory.py is in the same directory.")
     
+    # =========================================================================
+    # PATTERN MATCHING - Use known patterns for reliable correction
+    # =========================================================================
+    if HAS_PATTERN_MATCHING and getattr(args, 'pattern_match', False):
+        print("\n🎸 Pattern Matching:")
+        print("-" * 40)
+        
+        try:
+            enhanced_notes, pattern_info = apply_pattern_enhancement_to_notes(
+                notes,
+                args=args,
+                match_threshold=getattr(args, 'pattern_threshold', 0.70),
+                verbose=True
+            )
+            
+            if pattern_info['stats']['patterns_found'] > 0:
+                print(f"\n✓ Found {pattern_info['stats']['patterns_found']} patterns")
+                print(f"  Corrections: {pattern_info['stats']['corrections']}")
+                
+                # Replace notes with enhanced version
+                notes = enhanced_notes
+                
+                # Add pattern annotations
+                for seg in pattern_info.get('segments', []):
+                    print(f"  • {seg['pattern_name']}: {seg['match_score']} ({seg['description']})")
+            else:
+                print("  No strong pattern matches found")
+        except Exception as e:
+            print(f"⚠️  Pattern matching failed: {e}")
+    elif not HAS_PATTERN_MATCHING and getattr(args, 'pattern_match', False):
+        print("⚠️  Pattern matching module not available.")
+        print("   Make sure pattern_library.py and pattern_integration.py are present.")
+    
     # Detect chords if enabled
     chords = None
     if args.chords:
@@ -5151,12 +5311,19 @@ Examples:
     
     # Convert to tabs - use spectral string detection if requested
     use_spectral = args.spectral_strings and HAS_STRING_DETECTION
+    use_position = getattr(args, 'position_tracking', False) and HAS_POSITION_TRACKING
     
     if use_spectral:
         print("\n🎸 Using spectral string detection...")
         if not HAS_STRING_DETECTION:
             print("⚠️  String detection module not available, falling back to heuristics")
             use_spectral = False
+    
+    if use_position:
+        print("\n📍 Using fretboard position tracking...")
+        if not HAS_POSITION_TRACKING:
+            print("⚠️  Position tracking module not available, falling back to heuristics")
+            use_position = False
     
     # Convert to tabs - use optimizer if requested
     if args.optimize_fingering:
