@@ -112,6 +112,16 @@ try:
 except ImportError:
     HAS_RHYTHM_NOTATION = False
 
+# Difficulty analyzer module
+try:
+    from difficulty_analyzer import (
+        DifficultyAnalyzer, DifficultyReport, DifficultyLevel,
+        analyze_difficulty
+    )
+    HAS_DIFFICULTY_ANALYZER = True
+except ImportError:
+    HAS_DIFFICULTY_ANALYZER = False
+
 # Basic Pitch support via Docker
 import json
 import shutil
@@ -3803,6 +3813,12 @@ Examples:
     # Sync export for web player integration
     parser.add_argument('--export-sync', type=str, default=None, metavar='PATH',
                         help='Export JSON sync data for web player "follow along" playback (e.g., output.sync.json)')
+    
+    # Difficulty analysis arguments
+    parser.add_argument('--analyze-difficulty', action='store_true',
+                        help='Analyze and report tab difficulty (rating, techniques, stretches, speed)')
+    parser.add_argument('--difficulty-json', type=str, default=None, metavar='PATH',
+                        help='Export difficulty analysis as JSON (e.g., difficulty.json)')
     
     # Add audio preprocessing arguments
     add_preprocessing_args(parser)
