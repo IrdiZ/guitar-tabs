@@ -15,3 +15,9 @@ transcribed_*.json
 transcribed_*.pdf
 debug*.png
 debug*_sections/
+
+# Ground truth test outputs (can be regenerated)
+test_ground_truth/*.wav
+test_ground_truth/test_results.json
+test_ground_truth/optimal_params.json
+test_ground_truth/latest_run.txt

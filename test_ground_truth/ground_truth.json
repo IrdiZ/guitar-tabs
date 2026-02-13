@@ -1,0 +1,447 @@
+{
+  "e_minor_pentatonic_scale": {
+    "description": "E minor pentatonic scale - 6 notes, 600ms spacing",
+    "audio_file": "/root/clawd/guitar-tabs/test_ground_truth/test_scale.wav",
+    "duration": 4.0,
+    "notes": [
+      {
+        "start_time": 0.0,
+        "duration": 0.5,
+        "frequency": 329.63,
+        "midi_note": 64,
+        "note_name": "E4",
+        "string": 0,
+        "fret": 0
+      },
+      {
+        "start_time": 0.6,
+        "duration": 0.5,
+        "frequency": 392.0,
+        "midi_note": 67,
+        "note_name": "G4",
+        "string": 0,
+        "fret": 3
+      },
+      {
+        "start_time": 1.2,
+        "duration": 0.5,
+        "frequency": 440.0,
+        "midi_note": 69,
+        "note_name": "A4",
+        "string": 0,
+        "fret": 5
+      },
+      {
+        "start_time": 1.8,
+        "duration": 0.5,
+        "frequency": 493.88,
+        "midi_note": 71,
+        "note_name": "B4",
+        "string": 1,
+        "fret": 0
+      },
+      {
+        "start_time": 2.4,
+        "duration": 0.5,
+        "frequency": 587.33,
+        "midi_note": 74,
+        "note_name": "D5",
+        "string": 1,
+        "fret": 3
+      },
+      {
+        "start_time": 3.0,
+        "duration": 0.5,
+        "frequency": 659.25,
+        "midi_note": 76,
+        "note_name": "E5",
+        "string": 1,
+        "fret": 5
+      }
+    ]
+  },
+  "e_major_chord": {
+    "description": "E major open chord - 6 simultaneous notes",
+    "audio_file": "/root/clawd/guitar-tabs/test_ground_truth/test_chord_e.wav",
+    "duration": 2.0,
+    "notes": [
+      {
+        "start_time": 0.0,
+        "duration": 1.5,
+        "frequency": 82.41,
+        "midi_note": 40,
+        "note_name": "E2",
+        "string": 5,
+        "fret": 0
+      },
+      {
+        "start_time": 0.0,
+        "duration": 1.5,
+        "frequency": 123.47,
+        "midi_note": 47,
+        "note_name": "B2",
+        "string": 4,
+        "fret": 2
+      },
+      {
+        "start_time": 0.0,
+        "duration": 1.5,
+        "frequency": 164.81,
+        "midi_note": 52,
+        "note_name": "E3",
+        "string": 3,
+        "fret": 2
+      },
+      {
+        "start_time": 0.0,
+        "duration": 1.5,
+        "frequency": 207.65,
+        "midi_note": 56,
+        "note_name": "G#3",
+        "string": 2,
+        "fret": 1
+      },
+      {
+        "start_time": 0.0,
+        "duration": 1.5,
+        "frequency": 246.94,
+        "midi_note": 59,
+        "note_name": "B3",
+        "string": 1,
+        "fret": 0
+      },
+      {
+        "start_time": 0.0,
+        "duration": 1.5,
+        "frequency": 329.63,
+        "midi_note": 64,
+        "note_name": "E4",
+        "string": 0,
+        "fret": 0
+      }
+    ]
+  },
+  "simple_riff": {
+    "description": "Simple rock riff - 8 notes, 400ms spacing, repeated pattern",
+    "audio_file": "/root/clawd/guitar-tabs/test_ground_truth/test_riff.wav",
+    "duration": 3.5,
+    "notes": [
+      {
+        "start_time": 0.0,
+        "duration": 0.3,
+        "frequency": 82.41,
+        "midi_note": 40,
+        "note_name": "E2",
+        "string": 5,
+        "fret": 0
+      },
+      {
+        "start_time": 0.4,
+        "duration": 0.3,
+        "frequency": 98.0,
+        "midi_note": 43,
+        "note_name": "G2",
+        "string": 5,
+        "fret": 3
+      },
+      {
+        "start_time": 0.8,
+        "duration": 0.3,
+        "frequency": 110.0,
+        "midi_note": 45,
+        "note_name": "A2",
+        "string": 5,
+        "fret": 5
+      },
+      {
+        "start_time": 1.2,
+        "duration": 0.3,
+        "frequency": 98.0,
+        "midi_note": 43,
+        "note_name": "G2",
+        "string": 5,
+        "fret": 3
+      },
+      {
+        "start_time": 1.6,
+        "duration": 0.3,
+        "frequency": 82.41,
+        "midi_note": 40,
+        "note_name": "E2",
+        "string": 5,
+        "fret": 0
+      },
+      {
+        "start_time": 2.0,
+        "duration": 0.3,
+        "frequency": 98.0,
+        "midi_note": 43,
+        "note_name": "G2",
+        "string": 5,
+        "fret": 3
+      },
+      {
+        "start_time": 2.4,
+        "duration": 0.3,
+        "frequency": 110.0,
+        "midi_note": 45,
+        "note_name": "A2",
+        "string": 5,
+        "fret": 5
+      },
+      {
+        "start_time": 2.8,
+        "duration": 0.3,
+        "frequency": 98.0,
+        "midi_note": 43,
+        "note_name": "G2",
+        "string": 5,
+        "fret": 3
+      }
+    ]
+  },
+  "pure_tones": {
+    "description": "Pure sine waves - A4, B4, C5, D5 - easiest to detect",
+    "audio_file": "/root/clawd/guitar-tabs/test_ground_truth/test_pure_tones.wav",
+    "duration": 4.0,
+    "notes": [
+      {
+        "start_time": 0.0,
+        "duration": 0.8,
+        "frequency": 440.0,
+        "midi_note": 69,
+        "note_name": "A4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 1.0,
+        "duration": 0.8,
+        "frequency": 493.88,
+        "midi_note": 71,
+        "note_name": "B4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 2.0,
+        "duration": 0.8,
+        "frequency": 523.25,
+        "midi_note": 72,
+        "note_name": "C5",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 3.0,
+        "duration": 0.8,
+        "frequency": 587.33,
+        "midi_note": 74,
+        "note_name": "D5",
+        "string": null,
+        "fret": null
+      }
+    ]
+  },
+  "fast_notes": {
+    "description": "Fast sequence - 8 notes, 200ms spacing (testing onset detection)",
+    "audio_file": "/root/clawd/guitar-tabs/test_ground_truth/test_fast_notes.wav",
+    "duration": 2.0,
+    "notes": [
+      {
+        "start_time": 0.0,
+        "duration": 0.15,
+        "frequency": 329.63,
+        "midi_note": 64,
+        "note_name": "E4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 0.2,
+        "duration": 0.15,
+        "frequency": 349.23,
+        "midi_note": 65,
+        "note_name": "F4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 0.4,
+        "duration": 0.15,
+        "frequency": 392.0,
+        "midi_note": 67,
+        "note_name": "G4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 0.6,
+        "duration": 0.15,
+        "frequency": 440.0,
+        "midi_note": 69,
+        "note_name": "A4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 0.8,
+        "duration": 0.15,
+        "frequency": 493.88,
+        "midi_note": 71,
+        "note_name": "B4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 1.0,
+        "duration": 0.15,
+        "frequency": 523.25,
+        "midi_note": 72,
+        "note_name": "C5",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 1.2,
+        "duration": 0.15,
+        "frequency": 587.33,
+        "midi_note": 74,
+        "note_name": "D5",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 1.4,
+        "duration": 0.15,
+        "frequency": 659.25,
+        "midi_note": 76,
+        "note_name": "E5",
+        "string": null,
+        "fret": null
+      }
+    ]
+  },
+  "wide_range": {
+    "description": "Wide range - E2 to E5 (testing frequency detection across octaves)",
+    "audio_file": "/root/clawd/guitar-tabs/test_ground_truth/test_range.wav",
+    "duration": 4.5,
+    "notes": [
+      {
+        "start_time": 0.0,
+        "duration": 0.5,
+        "frequency": 82.41,
+        "midi_note": 40,
+        "note_name": "E2",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 0.7,
+        "duration": 0.5,
+        "frequency": 164.81,
+        "midi_note": 52,
+        "note_name": "E3",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 1.4,
+        "duration": 0.5,
+        "frequency": 329.63,
+        "midi_note": 64,
+        "note_name": "E4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 2.1,
+        "duration": 0.5,
+        "frequency": 659.25,
+        "midi_note": 76,
+        "note_name": "E5",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 2.8,
+        "duration": 0.5,
+        "frequency": 329.63,
+        "midi_note": 64,
+        "note_name": "E4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 3.5,
+        "duration": 0.5,
+        "frequency": 164.81,
+        "midi_note": 52,
+        "note_name": "E3",
+        "string": null,
+        "fret": null
+      }
+    ]
+  },
+  "chromatic": {
+    "description": "Chromatic scale E4-A4 - testing semitone detection",
+    "audio_file": "/root/clawd/guitar-tabs/test_ground_truth/test_chromatic.wav",
+    "duration": 2.8,
+    "notes": [
+      {
+        "start_time": 0.0,
+        "duration": 0.3,
+        "frequency": 329.63,
+        "midi_note": 64,
+        "note_name": "E4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 0.4,
+        "duration": 0.3,
+        "frequency": 349.23,
+        "midi_note": 65,
+        "note_name": "F4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 0.8,
+        "duration": 0.3,
+        "frequency": 369.99,
+        "midi_note": 66,
+        "note_name": "F#4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 1.2,
+        "duration": 0.3,
+        "frequency": 392.0,
+        "midi_note": 67,
+        "note_name": "G4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 1.6,
+        "duration": 0.3,
+        "frequency": 415.3,
+        "midi_note": 68,
+        "note_name": "G#4",
+        "string": null,
+        "fret": null
+      },
+      {
+        "start_time": 2.0,
+        "duration": 0.3,
+        "frequency": 440.0,
+        "midi_note": 69,
+        "note_name": "A4",
+        "string": null,
+        "fret": null
+      }
+    ]
+  }
+}
