@@ -16,6 +16,12 @@ Advanced onset detection with:
 - Ensemble/voting across methods
 - Guitar-specific attack transient detection
 - Hammer-on/pull-off (legato) detection for softer onsets
+
+Polyphonic pitch detection (--polyphonic):
+- NMF: Non-negative Matrix Factorization on Constant-Q Transform
+- Harmonic: Harmonic/percussive separation with multi-peak picking
+- Detects when multiple strings are played simultaneously
+- Ideal for chords and fingerstyle playing
 """
 
 import librosa
@@ -1317,7 +1323,9 @@ def detect_notes_from_audio(
     pitch_method: str = 'pyin',
     use_harmonic_separation: bool = True,
     median_filter_size: int = 5,
-    tuning: List[int] = None
+    tuning: List[int] = None,
+    preprocess_config: Optional[PreprocessingConfig] = None,
+    save_preprocessed: Optional[str] = None
 ) -> List[Note]:
     """
     Detect notes from audio file using advanced pitch detection.
@@ -1331,9 +1339,22 @@ def detect_notes_from_audio(
         use_harmonic_separation: Whether to use HPSS
         median_filter_size: Size of median filter for pitch smoothing
         tuning: Guitar tuning (MIDI notes)
+        preprocess_config: Optional preprocessing configuration
+        save_preprocessed: Optional path to save preprocessed audio
     """
     print(f"Loading audio: {audio_path}")
     y, sr = librosa.load(audio_path, sr=22050, mono=True)
+    
+    # Apply audio preprocessing if configured
+    if preprocess_config and preprocess_config.enabled:
+        print("\n🔧 Applying audio preprocessing pipeline...")
+        y = preprocess_audio(y, sr, preprocess_config, verbose=True)
+        print()
+        
+        # Optionally save preprocessed audio for debugging
+        if save_preprocessed:
+            print(f"💾 Saving preprocessed audio to: {save_preprocessed}")
+            sf.write(save_preprocessed, y, sr)
     
     # Optional: Extract harmonic component for cleaner pitch detection
     if use_harmonic_separation:
@@ -2835,11 +2856,22 @@ Export formats:
   gp5       - Guitar Pro 5 format (.gp5)
   musicxml  - MusicXML format (.musicxml) - universal format
 
+Polyphonic detection (--polyphonic):
+  nmf       - Non-negative Matrix Factorization on CQT (default)
+              Best for clean recordings with multiple simultaneous notes
+  harmonic  - Harmonic/percussive separation + peak picking
+              Good for noisy recordings or complex arrangements
+
 Examples:
   %(prog)s song.mp3
   %(prog)s song.mp3 -o tabs.txt
   %(prog)s song.mp3 -o tabs.gp5 --format gp5
   %(prog)s "https://youtube.com/watch?v=..." --format musicxml -o song.musicxml
+  
+  # Polyphonic detection for chords and fingerstyle
+  %(prog)s song.mp3 --polyphonic
+  %(prog)s song.mp3 --polyphonic --poly-method harmonic
+  %(prog)s song.mp3 --polyphonic --max-simultaneous 4  # Max 4 notes at once
         """
     )
     parser.add_argument('audio_file', help='Path to audio file OR YouTube URL')
@@ -2879,6 +2911,24 @@ Examples:
     parser.add_argument('--max-simultaneous', type=int, default=6,
                         help='Maximum simultaneous notes for polyphonic detection (default: 6)')
     
+    # Musical post-processing arguments
+    parser.add_argument('--quantize', '-q', type=int, choices=[4, 8, 16, 32], default=None,
+                        help='Quantize timing to note subdivision (4=quarter, 8=eighth, 16=sixteenth, 32=32nd)')
+    parser.add_argument('--key', '-k', type=str, default=None,
+                        help='Musical key for pitch snapping (e.g., Am, C, F#m, "Bb major"). Auto-detects if not specified.')
+    parser.add_argument('--scale', type=str, default=None,
+                        choices=['major', 'natural_minor', 'harmonic_minor', 'pentatonic_major', 
+                                'pentatonic_minor', 'blues', 'dorian', 'mixolydian', 'chromatic'],
+                        help='Scale type for pitch snapping (default: based on key mode)')
+    parser.add_argument('--no-snap', action='store_true',
+                        help='Disable pitch snapping to scale')
+    parser.add_argument('--no-playability-filter', action='store_true',
+                        help='Disable physical playability filtering')
+    parser.add_argument('--detect-patterns', action='store_true',
+                        help='Detect repeated patterns/riffs in the transcription')
+    parser.add_argument('--swing', type=float, default=0.0,
+                        help='Swing amount for quantization (0.0=straight, 0.33=triplet, 0.5=heavy)')
+    
     # Add audio preprocessing arguments
     add_preprocessing_args(parser)
     
@@ -2902,6 +2952,9 @@ Examples:
     # Determine title from filename if not specified
     title = args.title or os.path.splitext(os.path.basename(audio_path))[0]
     
+    # Create preprocessing config
+    preprocess_config = PreprocessingConfig.from_args(args)
+    
     print("🎸 Guitar Tab Generator (Enhanced)")
     print("=" * 40)
     print(f"Tuning: {args.tuning} {tuning}")
@@ -2913,6 +2966,8 @@ Examples:
         print(f"Pitch method: {args.pitch_method}")
         print(f"Harmonic separation: {'enabled' if not args.no_harmonic_separation else 'disabled'}")
         print(f"Median filter: {args.median_filter if args.median_filter > 0 else 'disabled'}")
+    if preprocess_config.enabled:
+        print(f"Preprocessing: ENABLED")
     print()
     
     # Detect notes - use polyphonic or monophonic detection
@@ -2923,7 +2978,9 @@ Examples:
             confidence_threshold=args.confidence,
             method=args.poly_method,
             max_simultaneous=args.max_simultaneous,
-            tuning=tuning
+            tuning=tuning,
+            preprocess_config=preprocess_config,
+            save_preprocessed=getattr(args, 'save_preprocessed', None)
         )
     else:
         notes = detect_notes_from_audio(
@@ -2933,19 +2990,61 @@ Examples:
             use_harmonic_separation=not args.no_harmonic_separation,
             median_filter_size=args.median_filter,
             min_note_duration=args.min_duration,
-            tuning=tuning
+            tuning=tuning,
+            preprocess_config=preprocess_config,
+            save_preprocessed=getattr(args, 'save_preprocessed', None)
         )
     
     if not notes:
         print("No notes detected! Try lowering confidence threshold with -c 0.1")
         sys.exit(1)
     
-    # Print detected notes
-    print("\n📝 Detected Notes:")
+    # Print detected notes (before post-processing)
+    print("\n📝 Detected Notes (raw):")
     for note in notes[:20]:  # Show first 20
         print(f"  {note.name:4} at {note.start_time:.2f}s (confidence: {note.confidence:.2f})")
     if len(notes) > 20:
         print(f"  ... and {len(notes) - 20} more")
+    
+    # =========================================================================
+    # MUSICAL POST-PROCESSING
+    # =========================================================================
+    detected_key = None
+    patterns = []
+    
+    if HAS_MUSIC_THEORY:
+        print("\n🎵 Musical Post-Processing:")
+        print("-" * 40)
+        
+        # Parse user-specified key or auto-detect
+        user_key = None
+        if args.key:
+            try:
+                user_key = parse_key_string(args.key)
+                print(f"🔑 Using specified key: {user_key.name}")
+            except Exception as e:
+                print(f"⚠️  Could not parse key '{args.key}': {e}")
+                print("   Will auto-detect instead.")
+        
+        # Apply post-processing (key detection, pitch snapping, quantization)
+        notes, detected_key, patterns = post_process_notes(
+            notes,
+            key=user_key,
+            scale_type=args.scale,
+            snap_to_scale_enabled=not args.no_snap,
+            quantize_enabled=args.quantize is not None,
+            tempo=args.tempo,
+            subdivision=args.quantize if args.quantize else 16,
+            detect_patterns_enabled=args.detect_patterns
+        )
+        
+        # Show detected patterns
+        if patterns:
+            print(format_pattern_info(patterns, notes))
+    else:
+        if args.key or args.quantize or not args.no_snap:
+            print("⚠️  Music theory module not available. Skipping post-processing.")
+            print("   Make sure music_theory.py is in the same directory.")
     
     # Detect chords if enabled
     chords = None
