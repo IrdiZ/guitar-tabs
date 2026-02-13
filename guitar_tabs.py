@@ -4009,8 +4009,60 @@ Examples:
         # Optimize for lower fret positions
         tab_notes = prefer_lower_frets(tab_notes, notes, tuning=tuning)
     
+    # Rhythm analysis
+    tempo_info = None
+    rhythm_output = None
+    detected_bpm = args.tempo
+    
+    if (args.rhythm or args.detect_tempo) and HAS_RHYTHM_NOTATION:
+        print("\n🎵 Rhythm Analysis:")
+        print("-" * 40)
+        
+        # Load audio for tempo detection
+        y_rhythm, sr_rhythm = librosa.load(audio_path, sr=22050)
+        
+        # Analyze rhythm
+        rhythm_result = analyze_audio_rhythm(
+            y=y_rhythm,
+            sr=sr_rhythm,
+            notes=notes
+        )
+        
+        tempo_info = rhythm_result['tempo_info']
+        detected_bpm = rhythm_result['tempo']['bpm']
+        
+        print(f"  Detected tempo: {detected_bpm:.1f} BPM")
+        print(f"  Confidence: {rhythm_result['tempo']['confidence']:.2f}")
+        print(f"  Time signature: {rhythm_result['time_signature']['numerator']}/{rhythm_result['time_signature']['denominator']}")
+        
+        if 'swing' in rhythm_result and rhythm_result['swing']['detected']:
+            print(f"  Swing detected: ratio {rhythm_result['swing']['ratio']:.2f}")
+        
+        if 'triplets' in rhythm_result and rhythm_result['triplets']:
+            print(f"  Triplet groups: {len(rhythm_result['triplets'])}")
+        
+        # Use detected tempo if requested
+        if args.detect_tempo:
+            args.tempo = int(round(detected_bpm))
+            print(f"  Using detected tempo: {args.tempo} BPM")
+    elif (args.rhythm or args.detect_tempo) and not HAS_RHYTHM_NOTATION:
+        print("\n⚠️  Rhythm notation module not available.")
+        print("   Make sure rhythm_notation.py is in the same directory.")
+    
     # Format as ASCII tab (always show preview, with chords if detected)
-    tab_output = format_ascii_tab(tab_notes, tuning=tuning, chords=chords)
+    if args.rhythm and HAS_RHYTHM_NOTATION and tempo_info:
+        tab_output = format_tab_with_rhythm(
+            tab_notes,
+            notes,
+            tempo_info,
+            beats_per_line=8,
+            tuning=tuning,
+            use_unicode=args.unicode_rhythm,
+            show_tempo=True,
+            show_time_sig=True
+        )
+    else:
+        tab_output = format_ascii_tab(tab_notes, tuning=tuning, chords=chords)
     
     # Show chord diagrams if requested
     chord_diagrams = ""
