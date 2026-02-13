@@ -73,6 +73,16 @@ try:
 except ImportError:
     HAS_MUSIC_THEORY = False
 
+# Basic Pitch support via Docker
+import json
+import shutil
+
+def check_basicpitch_available() -> bool:
+    """Check if basic-pitch Docker container is available."""
+    return shutil.which('docker') is not None
+
+HAS_BASICPITCH = check_basicpitch_available()
+
 # Guitar tunings (MIDI note numbers, low to high)
 TUNINGS = {
     'standard': [40, 45, 50, 55, 59, 64],  # E A D G B E
@@ -994,6 +1004,126 @@ def detect_pitch_crepe(
     return f0, voiced_flag, confidence
 
 
+def detect_notes_basicpitch(
+    audio_path: str,
+    onset_threshold: float = 0.5,
+    frame_threshold: float = 0.3,
+    min_note_len: int = 50,
+    min_freq: Optional[float] = None,
+    max_freq: Optional[float] = None,
+    confidence_threshold: float = 0.3
+) -> List['Note']:
+    """
+    Detect notes using Spotify's Basic Pitch model via Docker.
+    
+    Basic Pitch is a neural network specifically designed for polyphonic music 
+    transcription. Unlike pYIN or CREPE which are monophonic, Basic Pitch can
+    detect multiple simultaneous notes - perfect for guitar chords.
+    
+    The model runs in a Docker container with TensorFlow 2.15 and Python 3.11
+    to ensure compatibility (basic-pitch requires numpy <1.24 which doesn't 
+    work with Python 3.13).
+    
+    Args:
+        audio_path: Path to audio file
+        onset_threshold: Minimum confidence for note onset (0-1)
+        frame_threshold: Minimum confidence for note frames (0-1)
+        min_note_len: Minimum note length in milliseconds
+        min_freq: Minimum frequency in Hz (None for guitar default: 75 Hz)
+        max_freq: Maximum frequency in Hz (None for guitar default: 1400 Hz)
+        confidence_threshold: Minimum confidence to include note
+        
+    Returns:
+        List of Note objects with detected pitches
+        
+    Requires:
+        Docker with the guitar-tabs-basicpitch image:
+        cd guitar-tabs/basicpitch && docker build -t guitar-tabs-basicpitch .
+    """
+    if not HAS_BASICPITCH:
+        raise RuntimeError(
+            "Basic Pitch requires Docker. Install Docker and build the image:\n"
+            "  cd guitar-tabs/basicpitch && docker build -t guitar-tabs-basicpitch .\n"
+            "Or use --pitch-method pyin instead."
+        )
+    
+    # Check if Docker image exists
+    import subprocess
+    result = subprocess.run(
+        ['docker', 'images', '-q', 'guitar-tabs-basicpitch'],
+        capture_output=True, text=True
+    )
+    if not result.stdout.strip():
+        raise RuntimeError(
+            "Basic Pitch Docker image not found. Build it with:\n"
+            "  cd guitar-tabs/basicpitch && docker build -t guitar-tabs-basicpitch ."
+        )
+    
+    # Get absolute path for Docker mount
+    abs_path = os.path.abspath(audio_path)
+    dir_path = os.path.dirname(abs_path)
+    file_name = os.path.basename(abs_path)
+    
+    # Build Docker command
+    cmd = [
+        'docker', 'run', '--rm',
+        '-v', f'{dir_path}:/data',
+        'guitar-tabs-basicpitch',
+        f'/data/{file_name}',
+        '--onset-threshold', str(onset_threshold),
+        '--frame-threshold', str(frame_threshold),
+        '--min-note-len', str(min_note_len),
+    ]
+    
+    if min_freq is not None:
+        cmd.extend(['--min-freq', str(min_freq)])
+    if max_freq is not None:
+        cmd.extend(['--max-freq', str(max_freq)])
+    
+    print(f"🎵 Running Basic Pitch in Docker container...")
+    print(f"  File: {audio_path}")
+    print(f"  Thresholds: onset={onset_threshold}, frame={frame_threshold}")
+    
+    # Run Basic Pitch in Docker
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        raise RuntimeError(f"Basic Pitch failed:\n{result.stderr}")
+    
+    # Parse JSON output (Basic Pitch writes JSON to stdout)
+    try:
+        # Find the JSON output (skip any TensorFlow warnings)
+        stdout_lines = result.stdout.strip().split('\n')
+        json_start = None
+        for i, line in enumerate(stdout_lines):
+            if line.strip().startswith('{'):
+                json_start = i
+                break
+        
+        if json_start is None:
+            raise ValueError("No JSON output found from Basic Pitch")
+        
+        json_str = '\n'.join(stdout_lines[json_start:])
+        data = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Failed to parse Basic Pitch output: {e}\n{result.stdout}")
+    
+    # Convert to Note objects
+    notes = []
+    for note_data in data.get('notes', []):
+        if note_data['confidence'] >= confidence_threshold:
+            notes.append(Note(
+                midi=note_data['midi'],
+                start_time=note_data['start_time'],
+                duration=note_data['duration'],
+                confidence=note_data['confidence']
+            ))
+    
+    print(f"  ✅ Basic Pitch detected {len(notes)} notes (filtered from {data.get('total_notes', '?')} total)")
+    
+    return notes
+
+
 def detect_pitch_cqt(
     y: np.ndarray,
     sr: int,
@@ -1407,7 +1537,8 @@ def detect_notes_from_audio(
     median_filter_size: int = 5,
     tuning: List[int] = None,
     preprocess_config: Optional[PreprocessingConfig] = None,
-    save_preprocessed: Optional[str] = None
+    save_preprocessed: Optional[str] = None,
+    crepe_model: str = 'small'
 ) -> List[Note]:
     """
     Detect notes from audio file using advanced pitch detection.
@@ -1417,13 +1548,41 @@ def detect_notes_from_audio(
         hop_length: Hop length for STFT
         min_note_duration: Minimum note duration in seconds
         confidence_threshold: Minimum confidence for note detection
-        pitch_method: 'pyin' (better for monophonic), 'piptrack', or 'cqt' (best for music)
+        pitch_method: 'pyin', 'piptrack', 'cqt', 'crepe', or 'basicpitch'
+            - pyin: Fast, good for monophonic (default)
+            - piptrack: Alternative monophonic
+            - cqt: Constant-Q transform based
+            - crepe: Deep learning, most accurate for monophonic
+            - basicpitch: Polyphonic - best for chords (requires Docker)
         use_harmonic_separation: Whether to use HPSS
         median_filter_size: Size of median filter for pitch smoothing
         tuning: Guitar tuning (MIDI notes)
         preprocess_config: Optional preprocessing configuration
         save_preprocessed: Optional path to save preprocessed audio
+        crepe_model: CREPE model capacity ('tiny', 'small', 'medium', 'large', 'full')
     """
+    # Basic Pitch is a special case - it does its own audio loading
+    # and returns notes directly (polyphonic detection via Docker)
+    if pitch_method == 'basicpitch':
+        if not HAS_BASICPITCH:
+            print("⚠️  Basic Pitch requires Docker, falling back to pYIN")
+            pitch_method = 'pyin'
+        else:
+            notes = detect_notes_basicpitch(
+                audio_path,
+                onset_threshold=0.5,
+                frame_threshold=0.3,
+                min_note_len=int(min_note_duration * 1000),
+                confidence_threshold=confidence_threshold
+            )
+            # Filter by minimum duration
+            notes = [n for n in notes if n.duration >= min_note_duration]
+            # Post-process: suppress obvious harmonics
+            print("Filtering harmonics...")
+            notes = filter_harmonic_notes(notes)
+            print(f"Final note count: {len(notes)}")
+            return notes
+    
     print(f"Loading audio: {audio_path}")
     y, sr = librosa.load(audio_path, sr=22050, mono=True)
     
@@ -1475,8 +1634,29 @@ def detect_notes_from_audio(
         print(f"Detected {len(notes)} notes")
         return notes
     
-    # pYIN or piptrack methods
-    if pitch_method == 'pyin':
+    # pYIN, CREPE, or piptrack methods
+    # Handle CREPE fallback first
+    if pitch_method == 'crepe' and not HAS_CREPE:
+        print("⚠️  CREPE not available, falling back to pYIN")
+        print("   Install with: pip install crepe tensorflow")
+        pitch_method = 'pyin'
+    
+    if pitch_method == 'crepe':
+        # CREPE is a deep learning model for monophonic pitch - most accurate
+        f0, voiced_flag, confidence = detect_pitch_crepe(
+            y_pitch, sr, hop_length,
+            model_capacity=crepe_model,
+            viterbi=True  # Smooth pitch curve
+        )
+        
+        # Apply median filter to reduce jitter
+        if median_filter_size > 1:
+            f0 = apply_median_filter(f0, median_filter_size)
+        
+        # Smooth confidence values
+        confidence = smooth_confidence(confidence, window_size=5)
+    
+    elif pitch_method == 'pyin':
         # pYIN is better for monophonic sources like guitar
         f0, voiced_flag, voiced_probs = detect_pitch_pyin(y_pitch, sr, hop_length)
         
@@ -1487,7 +1667,7 @@ def detect_notes_from_audio(
         # Smooth confidence values
         confidence = smooth_confidence(voiced_probs, window_size=5)
         
-    else:  # piptrack
+    elif pitch_method == 'piptrack':
         pitches, magnitudes = detect_pitch_piptrack(y_pitch, sr, hop_length)
         
         # Extract dominant pitch per frame
@@ -3000,8 +3180,10 @@ Examples:
                         help='Artist name (for GP5/MusicXML export)')
     parser.add_argument('--tempo', type=int, default=120,
                         help='Tempo in BPM (default: 120)')
-    parser.add_argument('--pitch-method', '-p', choices=['pyin', 'piptrack', 'cqt'], default='pyin',
-                        help='Pitch detection method: pyin (monophonic), piptrack, cqt (best for music). Default: pyin')
+    parser.add_argument('--pitch-method', '-p', choices=['pyin', 'piptrack', 'cqt', 'crepe', 'basicpitch'], default='pyin',
+                        help='Pitch detection: pyin (fast), piptrack, cqt, crepe (deep learning), basicpitch (polyphonic, best for chords). Default: pyin')
+    parser.add_argument('--crepe-model', choices=['tiny', 'small', 'medium', 'large', 'full'], default='small',
+                        help='CREPE model capacity: tiny/small (fast), medium, large/full (accurate). Default: small')
     parser.add_argument('--no-harmonic-separation', action='store_true',
                         help='Disable harmonic/percussive separation')
     parser.add_argument('--median-filter', '-m', type=int, default=5,
@@ -3102,7 +3284,8 @@ Examples:
             min_note_duration=args.min_duration,
             tuning=tuning,
             preprocess_config=preprocess_config,
-            save_preprocessed=getattr(args, 'save_preprocessed', None)
+            save_preprocessed=getattr(args, 'save_preprocessed', None),
+            crepe_model=getattr(args, 'crepe_model', 'small')
         )
     
     if not notes:
