@@ -131,6 +131,19 @@ try:
 except ImportError:
     HAS_ENSEMBLE = False
 
+# Distortion-aware pitch detection (for heavy/distorted guitar)
+try:
+    from distortion_pitch import (
+        DistortionPitchDetector,
+        DistortionConfig,
+        DistortionPitchResult,
+        detect_pitches_distortion,
+        convert_to_notes as distortion_convert_to_notes,
+    )
+    HAS_DISTORTION_PITCH = True
+except ImportError:
+    HAS_ENSEMBLE = False
+
 # Precise note segmentation (IMPROVED NOTE BOUNDARIES)
 try:
     from note_segmentation import (
@@ -194,6 +207,19 @@ try:
     HAS_DEBUG_SPECTROGRAM = True
 except ImportError:
     HAS_DEBUG_SPECTROGRAM = False
+
+# Lead guitar isolation module
+try:
+    from lead_guitar_isolation import (
+        LeadIsolationConfig,
+        isolate_lead_guitar,
+        isolate_lead_from_array,
+        add_lead_isolation_args,
+        config_from_args as lead_config_from_args
+    )
+    HAS_LEAD_ISOLATION = True
+except ImportError:
+    HAS_LEAD_ISOLATION = False
 
 # Basic Pitch support via Docker
 import json
@@ -4271,6 +4297,10 @@ Examples:
     # Add frequency domain cleanup arguments
     if HAS_FREQ_CLEANUP:
         add_freq_cleanup_args(parser)
+    
+    # Add lead guitar isolation arguments
+    if HAS_LEAD_ISOLATION:
+        add_lead_isolation_args(parser)
     
     args = parser.parse_args()
     
