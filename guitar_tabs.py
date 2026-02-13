@@ -48,6 +48,18 @@ from preprocessing import (
     add_preprocessing_args
 )
 
+# Frequency domain cleanup module (applied before pitch detection)
+try:
+    from freq_cleanup import (
+        FreqCleanupConfig,
+        freq_domain_cleanup,
+        add_freq_cleanup_args,
+        config_from_args as freq_config_from_args
+    )
+    HAS_FREQ_CLEANUP = True
+except ImportError:
+    HAS_FREQ_CLEANUP = False
+
 # Sync export module for web player integration
 try:
     from sync_export import export_sync_json, generate_sync_data
@@ -4234,6 +4246,7 @@ Examples:
         print(f"Mode: Monophonic")
         print(f"Pitch method: {args.pitch_method}")
         print(f"Harmonic separation: {'enabled' if not args.no_harmonic_separation else 'disabled'}")
+        print(f"Octave correction: {'enabled' if not getattr(args, 'no_octave_correction', False) else 'disabled'}")
         print(f"Median filter: {args.median_filter if args.median_filter > 0 else 'disabled'}")
     if preprocess_config.enabled:
         print(f"Preprocessing: ENABLED")
