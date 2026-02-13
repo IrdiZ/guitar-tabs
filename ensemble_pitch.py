@@ -8,6 +8,7 @@ Combines multiple pitch detection algorithms using "wisdom of crowds" approach:
 - CREPE (neural network) - Deep learning, high accuracy
 - Basic Pitch (Spotify) - Polyphonic neural network
 - piptrack (librosa) - Multi-pitch tracking
+- HPS (Harmonic Product Spectrum) - BEST FOR DISTORTED GUITAR
 
 The ensemble:
 1. Runs ALL available detectors on the same audio
@@ -16,6 +17,10 @@ The ensemble:
 4. Only outputs high-confidence consensus notes
 
 This dramatically improves accuracy through multi-model agreement.
+
+HPS is critical for distorted guitar because distortion creates strong harmonics
+that can be louder than the fundamental. HPS multiplies downsampled spectra
+together, causing all harmonics to "vote" for the true fundamental frequency.
 """
 
 import numpy as np
@@ -41,6 +46,20 @@ except ImportError:
 # Check Docker-based Basic Pitch
 import shutil
 HAS_BASIC_PITCH_DOCKER = shutil.which('docker') is not None
+
+# Import Essentia (alternative pitch detection)
+try:
+    import essentia.standard as es
+    HAS_ESSENTIA = True
+except ImportError:
+    HAS_ESSENTIA = False
+
+# Import Parselmouth/Praat (alternative pitch detection)
+try:
+    import parselmouth
+    HAS_PARSELMOUTH = True
+except ImportError:
+    HAS_PARSELMOUTH = False
 
 # Constants
 GUITAR_MIN_HZ = 75
@@ -93,15 +112,23 @@ class EnsembleConfig:
     use_basic_pitch: bool = True
     use_piptrack: bool = True
     use_hps: bool = True  # Harmonic Product Spectrum - BEST FOR DISTORTED GUITAR
+    use_essentia_yin_fft: bool = True  # Essentia YIN FFT - FASTEST, HIGH ACCURACY
+    use_essentia_yin: bool = False      # Essentia YIN - slower but thorough
+    use_praat_cc: bool = True           # Praat cross-correlation - HIGH CONFIDENCE
+    use_praat_shs: bool = True          # Praat SHS - good for harmonics
     
     # Detector weights (higher = more trusted)
     weights: Dict[str, float] = field(default_factory=lambda: {
         'pyin': 1.0,
         'cqt': 0.8,
-        'crepe': 1.5,      # CREPE is most accurate for monophonic
-        'basic_pitch': 1.2, # Good for polyphonic
-        'piptrack': 0.6,    # Less accurate but fast
-        'hps': 1.3,        # HPS - excellent for distorted guitar where harmonics dominate
+        'crepe': 1.5,           # CREPE is most accurate for monophonic
+        'basic_pitch': 1.2,     # Good for polyphonic
+        'piptrack': 0.6,        # Less accurate but fast
+        'hps': 1.3,             # HPS - excellent for distorted guitar
+        'essentia_yin_fft': 1.3,  # Fast and accurate
+        'essentia_yin': 1.1,      # Thorough YIN implementation
+        'praat_cc': 1.2,          # High confidence scores
+        'praat_shs': 1.1,         # Good for harmonics
     })
     
     # Consensus parameters
@@ -160,6 +187,24 @@ class EnsemblePitchDetector:
         
         if self.config.use_hps:
             methods.append('hps')  # HPS is always available (pure numpy/scipy)
+        
+        # Essentia detectors (alternative library)
+        if HAS_ESSENTIA:
+            if self.config.use_essentia_yin_fft:
+                methods.append('essentia_yin_fft')
+            if self.config.use_essentia_yin:
+                methods.append('essentia_yin')
+        elif self.config.use_essentia_yin_fft or self.config.use_essentia_yin:
+            print("⚠️  Essentia not available (install: pip install essentia)")
+        
+        # Parselmouth/Praat detectors (alternative library)
+        if HAS_PARSELMOUTH:
+            if self.config.use_praat_cc:
+                methods.append('praat_cc')
+            if self.config.use_praat_shs:
+                methods.append('praat_shs')
+        elif self.config.use_praat_cc or self.config.use_praat_shs:
+            print("⚠️  Parselmouth not available (install: pip install praat-parselmouth)")
         
         return methods
     
@@ -232,6 +277,14 @@ class EnsemblePitchDetector:
             return self._detect_piptrack(y)
         elif method == 'hps':
             return self._detect_hps(y)
+        elif method == 'essentia_yin_fft':
+            return self._detect_essentia_yin_fft(y)
+        elif method == 'essentia_yin':
+            return self._detect_essentia_yin(y)
+        elif method == 'praat_cc':
+            return self._detect_praat_cc(y)
+        elif method == 'praat_shs':
+            return self._detect_praat_shs(y)
         else:
             raise ValueError(f"Unknown method: {method}")
     
@@ -488,6 +541,114 @@ class EnsemblePitchDetector:
                             frequency=float(freq),
                             confidence=float(mag),
                             method='piptrack',
+                            raw_pitch=float(freq)
+                        ))
+        
+        return candidates
+    
+    def _detect_hps(self, y: np.ndarray) -> List[PitchCandidate]:
+        """
+        Detect pitches using Harmonic Product Spectrum (HPS).
+        
+        HPS is CRITICAL for distorted guitar where harmonics dominate the fundamental.
+        
+        Algorithm:
+        1. Compute FFT magnitude spectrum
+        2. Downsample spectrum by factors of 2, 3, 4, 5
+        3. Multiply all downsampled versions together
+        4. The fundamental frequency "pops out" as the peak
+        
+        This works because harmonics at 2*f0, 3*f0, etc. all align with f0
+        when downsampled by their respective factors.
+        """
+        from scipy.signal import medfilt
+        
+        n_fft = 4096  # Larger FFT for better frequency resolution
+        num_harmonics = 5
+        hop_length = self.config.hop_length
+        
+        # Compute STFT
+        S = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=hop_length))
+        n_bins, n_frames = S.shape
+        
+        # Frequency bins
+        freqs = librosa.fft_frequencies(sr=self.sr, n_fft=n_fft)
+        
+        # Find bin indices for frequency range
+        min_bin = np.searchsorted(freqs, GUITAR_MIN_HZ)
+        max_bin = np.searchsorted(freqs, GUITAR_MAX_HZ)
+        
+        # Ensure we have enough bins for downsampling
+        max_valid_bin = n_bins // num_harmonics
+        max_bin = min(max_bin, max_valid_bin)
+        
+        if min_bin >= max_bin:
+            min_bin = max(1, max_bin - 100)
+        
+        times = librosa.frames_to_time(np.arange(n_frames), sr=self.sr, hop_length=hop_length)
+        candidates = []
+        
+        for frame_idx in range(n_frames):
+            spectrum = S[:, frame_idx]
+            
+            # Skip silent frames
+            if np.max(spectrum) < 1e-10:
+                continue
+            
+            # Normalize spectrum
+            spectrum_norm = spectrum / (np.max(spectrum) + 1e-10)
+            
+            # Initialize HPS with original spectrum
+            hps_len = max_bin
+            hps = spectrum_norm[:hps_len].copy()
+            
+            # Multiply by downsampled versions
+            for h in range(2, num_harmonics + 1):
+                downsampled = np.zeros(hps_len)
+                for i in range(hps_len):
+                    src_idx = i * h
+                    if src_idx < len(spectrum_norm):
+                        downsampled[i] = spectrum_norm[src_idx]
+                hps *= downsampled
+            
+            # Find the peak in the valid frequency range
+            if min_bin >= max_bin or max_bin > len(hps):
+                continue
+            
+            hps_search = hps[min_bin:max_bin]
+            
+            if len(hps_search) == 0 or np.max(hps_search) < 1e-20:
+                continue
+            
+            # Find peak
+            peak_idx_local = np.argmax(hps_search)
+            peak_idx = peak_idx_local + min_bin
+            peak_val = hps[peak_idx]
+            
+            # Calculate confidence based on peak prominence
+            window = 10
+            start = max(min_bin, peak_idx - window)
+            end = min(max_bin, peak_idx + window)
+            local_median = np.median(hps[start:end])
+            
+            if local_median > 0:
+                prominence = peak_val / local_median
+                conf = min(1.0, prominence / 10.0)
+            else:
+                conf = 0.5 if peak_val > 0 else 0.0
+            
+            # Only accept if confidence is reasonable
+            if conf > 0.2:
+                freq = freqs[peak_idx]
+                if GUITAR_MIN_HZ <= freq <= GUITAR_MAX_HZ:
+                    midi = int(round(librosa.hz_to_midi(freq)))
+                    if 30 <= midi <= 96:
+                        candidates.append(PitchCandidate(
+                            time=times[frame_idx],
+                            midi_note=midi,
+                            frequency=float(freq),
+                            confidence=float(conf),
+                            method='hps',
                             raw_pitch=float(freq)
                         ))
         

@@ -1853,7 +1853,8 @@ def detect_notes_with_voting(
     freq_cleanup_config: Optional['FreqCleanupConfig'] = None,
     save_preprocessed: Optional[str] = None,
     min_votes: int = 2,
-    verbose: bool = True
+    verbose: bool = True,
+    distortion_preprocess_config: Optional['DistortionPreprocessingConfig'] = None
 ) -> List[Note]:
     """
     Detect notes using multi-detector voting for maximum accuracy.
@@ -1877,6 +1878,7 @@ def detect_notes_with_voting(
         save_preprocessed: Optional path to save preprocessed audio
         min_votes: Minimum detector votes for consensus
         verbose: Print diagnostic info
+        distortion_preprocess_config: Optional distortion-specific preprocessing config
         
     Returns:
         List of detected Note objects
@@ -1901,6 +1903,16 @@ def detect_notes_with_voting(
         
         if save_preprocessed:
             print(f"💾 Saving preprocessed audio to: {save_preprocessed}")
+            sf.write(save_preprocessed, y, sr)
+    
+    # Apply distortion-specific preprocessing if configured
+    if distortion_preprocess_config and distortion_preprocess_config.enabled:
+        print("\n⚡ Applying distortion preprocessing pipeline...")
+        y = preprocess_distortion(y, sr, distortion_preprocess_config, verbose=True)
+        print()
+        
+        if save_preprocessed and not (preprocess_config and preprocess_config.enabled):
+            print(f"💾 Saving distortion-preprocessed audio to: {save_preprocessed}")
             sf.write(save_preprocessed, y, sr)
     
     # Optional: Extract harmonic component for cleaner pitch detection
@@ -4616,6 +4628,16 @@ Examples:
     if HAS_LEAD_ISOLATION:
         add_lead_isolation_args(parser)
     
+    # Add genre optimization arguments
+    if HAS_GENRE_OPTIMIZER:
+        add_genre_args(parser)
+    else:
+        # Fallback if module not loaded
+        parser.add_argument('--genre', '-g', type=str, default=None,
+                            choices=['metal', 'rock', 'blues', 'default'],
+                            help='Genre for optimized detection (metal, rock, blues). '
+                                 'Adjusts scale priors, technique sensitivity, and tempo expectations.')
+    
     args = parser.parse_args()
     
     # Parse tuning
@@ -4677,6 +4699,8 @@ Examples:
         print(f"Frequency Cleanup: ENABLED")
     if lead_isolation_config and lead_isolation_config.enabled:
         print(f"Lead Isolation: ENABLED (Demucs + M/S + frequency)")
+    if args.genre:
+        print(f"Genre Optimization: {args.genre.upper()}")
     print()
     
     # Detect notes - use polyphonic or monophonic detection
@@ -4690,7 +4714,8 @@ Examples:
             tuning=tuning,
             preprocess_config=preprocess_config,
             save_preprocessed=getattr(args, 'save_preprocessed', None),
-            lead_isolation_config=lead_isolation_config
+            lead_isolation_config=lead_isolation_config,
+            distortion_preprocess_config=distortion_preprocess_config
         )
     else:
         notes = detect_notes_from_audio(
@@ -4708,12 +4733,36 @@ Examples:
             octave_correction=not getattr(args, 'no_octave_correction', False),
             lead_isolation_config=lead_isolation_config,
             distortion_mode=getattr(args, 'distortion', False),
-            distortion_harmonics=getattr(args, 'distortion_harmonics', 5)
+            distortion_harmonics=getattr(args, 'distortion_harmonics', 5),
+            distortion_preprocess_config=distortion_preprocess_config
         )
     
     if not notes:
         print("No notes detected! Try lowering confidence threshold with -c 0.1")
         sys.exit(1)
+    
+    # =========================================================================
+    # GENRE-SPECIFIC OPTIMIZATION
+    # =========================================================================
+    genre_optimizer = None
+    if HAS_GENRE_OPTIMIZER and args.genre:
+        print(f"\n🎸 Applying {args.genre.upper()} genre optimization...")
+        print("-" * 40)
+        
+        # Apply genre-specific priors to adjust confidence scores
+        notes, genre_optimizer = apply_genre_optimization(
+            notes,
+            genre=args.genre,
+            detected_key=None,  # Will be detected in post-processing
+            verbose=True
+        )
+        
+        # Get genre-specific detection hints
+        profile = get_genre_profile(args.genre)
+        print(f"   Min note duration: {profile.min_note_duration:.3f}s")
+        print(f"   Technique boosts: bend={profile.technique_sensitivity.get('bend', 1.0):.1f}x, "
+              f"vibrato={profile.technique_sensitivity.get('vibrato', 1.0):.1f}x, "
+              f"tapping={profile.technique_sensitivity.get('tapping', 1.0):.1f}x")
     
     # Print detected notes (before post-processing)
     print("\n📝 Detected Notes (raw):")
