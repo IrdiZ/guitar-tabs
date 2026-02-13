@@ -4,4 +4,6 @@ __pycache__/
 *.wav
 *.mp3
 *.txt
+!requirements.txt
+!api/requirements.txt
 .DS_Store
