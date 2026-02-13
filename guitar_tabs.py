@@ -237,6 +237,25 @@ try:
 except ImportError:
     HAS_GENRE_OPTIMIZER = False
 
+# Solo range detection (auto-detect solo vs rhythm sections)
+try:
+    from solo_range_detection import (
+        SoloDetector,
+        SoloDetectionConfig,
+        SectionType,
+        Section,
+        detect_solo_sections,
+        get_solo_range_constraints,
+        apply_solo_range_constraints,
+        notes_to_tabs_with_solo_detection,
+        choose_fret_position_solo,
+        add_solo_detection_args,
+        config_from_args as solo_config_from_args
+    )
+    HAS_SOLO_DETECTION = True
+except ImportError:
+    HAS_SOLO_DETECTION = False
+
 # Basic Pitch support via Docker
 import json
 import shutil
@@ -2240,7 +2259,8 @@ def detect_notes_from_audio(
                 tuning=tuning,
                 preprocess_config=preprocess_config,
                 freq_cleanup_config=freq_cleanup_config,
-                save_preprocessed=save_preprocessed
+                save_preprocessed=save_preprocessed,
+                distortion_preprocess_config=distortion_preprocess_config
             )
     
     # Basic Pitch is a special case - it does its own audio loading
@@ -4638,6 +4658,14 @@ Examples:
                             help='Genre for optimized detection (metal, rock, blues). '
                                  'Adjusts scale priors, technique sensitivity, and tempo expectations.')
     
+    # Add solo range detection arguments
+    if HAS_SOLO_DETECTION:
+        add_solo_detection_args(parser)
+    else:
+        # Fallback if module not loaded
+        parser.add_argument('--detect-solos', action='store_true',
+                            help='Enable automatic solo vs rhythm section detection')
+    
     args = parser.parse_args()
     
     # Parse tuning
@@ -4677,6 +4705,12 @@ Examples:
         if lead_isolation_config.enabled and hasattr(args, 'save_lead_audio') and args.save_lead_audio:
             lead_isolation_config._save_path = args.save_lead_audio
     
+    # Create solo detection config
+    solo_detection_config = None
+    detect_solos = getattr(args, 'detect_solos', False)
+    if HAS_SOLO_DETECTION and detect_solos:
+        solo_detection_config = solo_config_from_args(args)
+    
     print("🎸 Guitar Tab Generator (Enhanced)")
     print("=" * 40)
     print(f"Tuning: {args.tuning} {tuning}")
@@ -4701,6 +4735,8 @@ Examples:
         print(f"Lead Isolation: ENABLED (Demucs + M/S + frequency)")
     if args.genre:
         print(f"Genre Optimization: {args.genre.upper()}")
+    if detect_solos and HAS_SOLO_DETECTION:
+        print(f"Solo Detection: ENABLED (auto-detect solo vs rhythm)")
     print()
     
     # Detect notes - use polyphonic or monophonic detection
@@ -4840,11 +4876,23 @@ Examples:
                 print(f"⚠️  Could not parse key '{args.key}': {e}")
                 print("   Will auto-detect instead.")
         
+        # Determine scale type - use genre-suggested scale if no scale specified
+        scale_type = args.scale
+        if scale_type is None and args.genre and HAS_GENRE_OPTIMIZER:
+            profile = get_genre_profile(args.genre)
+            if profile.preferred_scales:
+                # Use pentatonic minor for metal/rock by default (most common for lead)
+                if args.genre in ('metal', 'rock'):
+                    scale_type = 'pentatonic_minor'
+                else:
+                    scale_type = profile.preferred_scales[0]
+                print(f"🎸 Using {args.genre} genre scale: {scale_type}")
+        
         # Apply post-processing (key detection, pitch snapping, quantization)
         notes, detected_key, patterns = post_process_notes(
             notes,
             key=user_key,
-            scale_type=args.scale,
+            scale_type=scale_type,
             snap_to_scale_enabled=not args.no_snap,
             quantize_enabled=args.quantize is not None,
             tempo=args.tempo,

@@ -546,10 +546,13 @@ def isolate_lead_guitar(
         print("\n🎸 Lead Guitar Isolation Pipeline")
         print("-" * 40)
     
-    # 1. Source separation (Demucs)
+    # 1. Source separation (Demucs) or direct load
     y, sr = apply_source_separation(audio_path, config, verbose)
     if verbose:
-        print(f"  ✓ Source separation complete")
+        if config.source_separation:
+            print(f"  ✓ Source separation complete")
+        else:
+            print(f"  ✓ Audio loaded (no source separation)")
     
     # 2. Load original stereo for M/S processing
     if config.mid_side:
