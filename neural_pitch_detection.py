@@ -159,7 +159,7 @@ class TorchCrepeDetector(NeuralPitchDetector):
     
     def __init__(
         self,
-        model_capacity: str = 'full',  # 'tiny', 'small', 'medium', 'large', 'full'
+        model_capacity: str = 'small',  # 'tiny', 'small', 'medium', 'large', 'full' (small is faster on CPU)
         step_size: int = 10,  # ms between frames
         device: Optional[str] = None,
         min_confidence: float = 0.3,

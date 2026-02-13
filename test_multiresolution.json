@@ -1,0 +1,35 @@
+{
+  "audio_file": "/root/.clawdbot/media/inbound/7099892f-2b38-41fb-9813-ea8055cbc385.mp3",
+  "config": {
+    "adaptive": true,
+    "fast_threshold_nps": 6,
+    "slow_threshold_nps": 3
+  },
+  "notes": [
+    {
+      "midi_note": 45,
+      "start_time": 1.0448979591836736,
+      "end_time": 1.0681179138321995,
+      "confidence": 0.24075439447557428,
+      "frequency": 109.17398871316405,
+      "name": "A2",
+      "duration": 0.023219954648525887,
+      "methods": [
+        "medium"
+      ]
+    },
+    {
+      "midi_note": 45,
+      "start_time": 2.414875283446712,
+      "end_time": 2.4700226757369617,
+      "confidence": 0.23255971762203334,
+      "frequency": 110.84378344749128,
+      "name": "A2",
+      "duration": 0.05514739229024945,
+      "methods": [
+        "fast",
+        "medium"
+      ]
+    }
+  ]
+}

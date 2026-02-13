@@ -68,6 +68,13 @@ try:
 except ImportError:
     HAS_YIN = False
 
+# Import cepstral pitch detection
+try:
+    from cepstral_pitch import detect_cepstral_for_ensemble, CepstralConfig
+    HAS_CEPSTRAL = True
+except ImportError:
+    HAS_CEPSTRAL = False
+
 # Constants
 GUITAR_MIN_HZ = 75
 GUITAR_MAX_HZ = 1400
@@ -124,6 +131,7 @@ class EnsembleConfig:
     use_praat_cc: bool = True           # Praat cross-correlation - HIGH CONFIDENCE
     use_praat_shs: bool = True          # Praat SHS - good for harmonics
     use_yin: bool = True                # Custom YIN - BEST FOR MONOPHONIC, handles octave errors
+    use_cepstral: bool = True           # Cepstral analysis - EXCELLENT FOR DISTORTED GUITAR with harmonics
     
     # Detector weights (higher = more trusted)
     weights: Dict[str, float] = field(default_factory=lambda: {
@@ -138,6 +146,8 @@ class EnsembleConfig:
         'praat_cc': 1.2,          # High confidence scores
         'praat_shs': 1.1,         # Good for harmonics
         'yin': 1.4,               # Custom YIN - excellent for lead guitar, handles octave errors
+        'cepstrum': 1.3,          # Cepstral analysis - robust to harmonic content
+        'cepstrum_secondary': 0.7,  # Secondary cepstral peaks (lower confidence)
     })
     
     # Consensus parameters
@@ -221,6 +231,12 @@ class EnsemblePitchDetector:
         elif self.config.use_yin and not HAS_YIN:
             print("⚠️  Custom YIN not available (check yin_pitch.py)")
         
+        # Cepstral analysis (always available - pure numpy/scipy)
+        if self.config.use_cepstral and HAS_CEPSTRAL:
+            methods.append('cepstrum')
+        elif self.config.use_cepstral and not HAS_CEPSTRAL:
+            print("⚠️  Cepstral analysis not available (check cepstral_pitch.py)")
+        
         return methods
     
     def detect(self, y: np.ndarray, audio_path: Optional[str] = None) -> List[ConsensusNote]:
@@ -302,6 +318,8 @@ class EnsemblePitchDetector:
             return self._detect_praat_shs(y)
         elif method == 'yin':
             return self._detect_yin(y)
+        elif method == 'cepstrum':
+            return self._detect_cepstrum(y)
         else:
             raise ValueError(f"Unknown method: {method}")
     
@@ -924,6 +942,53 @@ class EnsemblePitchDetector:
                 confidence=r['confidence'],
                 method='yin',
                 raw_pitch=r['raw_pitch']
+            ))
+        
+        return candidates
+    
+    def _detect_cepstrum(self, y: np.ndarray) -> List[PitchCandidate]:
+        """
+        Detect pitches using cepstral analysis.
+        
+        The cepstrum is the INVERSE FFT of the LOG SPECTRUM. It's powerful because:
+        
+        1. Harmonics in the spectrum become periodic -> peak in cepstrum
+        2. The peak location = fundamental period (in samples)
+        3. Extremely robust to harmonic content - MORE harmonics = STRONGER peak
+        4. Works brilliantly on distorted guitar where harmonics dominate
+        
+        This is EXCELLENT for distorted guitar because:
+        - Distortion creates strong, predictable harmonic structures
+        - Cepstrum finds the common spacing between harmonics = fundamental
+        - Robust to cases where fundamental is weaker than harmonics
+        """
+        if not HAS_CEPSTRAL:
+            return []
+        
+        # Configure cepstral detection for guitar
+        config = CepstralConfig(
+            n_fft=4096,
+            hop_length=self.config.hop_length,
+            min_freq=GUITAR_MIN_HZ,
+            max_freq=GUITAR_MAX_HZ,
+            verify_harmonics=True,
+            verbose=False
+        )
+        
+        # Run cepstral detection
+        cepstral_results = detect_cepstral_for_ensemble(y, self.sr, config)
+        
+        # Convert to PitchCandidates
+        candidates = []
+        for r in cepstral_results:
+            method_name = r.get('method', 'cepstrum')
+            candidates.append(PitchCandidate(
+                time=r['time'],
+                midi_note=r['midi_note'],
+                frequency=r['frequency'],
+                confidence=r['confidence'],
+                method=method_name,
+                raw_pitch=r['frequency']
             ))
         
         return candidates

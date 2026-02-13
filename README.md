@@ -134,6 +134,70 @@ See `test_ground_truth/RESULTS.md` for detailed analysis.
 
 ---
 
+## Attack Transient Pitch Detection
+
+**Critical for distorted guitar**: The attack transient (first 20-50ms) contains the clearest pitch information. After that, distortion muddies the signal.
+
+### Why Attack-Based Detection?
+
+For distorted guitar, the sustain portion is problematic:
+- Compression takes time to engage
+- Harmonics build up from distortion
+- Intermodulation artifacts appear
+- The original pitch becomes obscured
+
+The **attack transient** is cleaner because:
+1. Initial string excitation before saturation kicks in
+2. First few wave cycles are most periodic
+3. Amp compression hasn't engaged yet
+4. Harmonics haven't built up
+
+### Usage
+
+```bash
+# Basic attack-based detection
+python attack_transient_pitch.py audio.mp3
+
+# Compare attack vs sustain (demonstrates the difference)
+python test_attack_vs_sustain.py audio.mp3
+
+# Full attack-priority ensemble detection
+python attack_ensemble_integration.py audio.mp3
+```
+
+### Key Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `attack_start_ms` | 5 | Skip first 5ms (pick noise) |
+| `attack_end_ms` | 50 | Primary analysis window end |
+| `use_hps` | True | Harmonic Product Spectrum (best for distortion) |
+| `use_yin` | True | YIN algorithm (robust monophonic) |
+| `require_agreement` | 2 | Minimum methods that must agree |
+
+### Pitch Detection Methods
+
+The attack analyzer uses multiple methods:
+
+| Method | Strength | Use Case |
+|--------|----------|----------|
+| **HPS** | Finds fundamental even when harmonics are stronger | Distorted guitar |
+| **YIN** | Robust for noisy signals | General monophonic |
+| **Autocorrelation** | Classic, fast | Clean transients |
+| **CQT** | Good frequency resolution at low frequencies | Bass notes |
+
+### Integration with Ensemble
+
+The `attack_ensemble_integration.py` module combines attack-based detection with sustain validation:
+
+1. **Primary**: Detect pitch from attack (weighted 2.0x)
+2. **Validation**: Check sustain for confirmation (weighted 0.5x)
+3. **Boost**: If attack and sustain agree, +30% confidence
+
+This approach ensures robust detection while still benefiting from sustain information when available.
+
+---
+
 ## ML-Enhanced Approaches
 
 ## Quick Start
